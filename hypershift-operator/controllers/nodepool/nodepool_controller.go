@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strconv"
+	"strings"
 	"time"
-
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -28,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -99,7 +99,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Ignore deleted nodePools, this can happen when foregroundDeletion
 	// is enabled
 	if !nodePool.DeletionTimestamp.IsZero() {
-		machineSet, _, err := generateScalableResources(r, ctx, infra.Status.InfrastructureName, infra.Status.PlatformStatus.AWS.Region, nodePool, targetNamespace)
+		machineSet, _, err := generateScalableResources(r, ctx, infra.Status.InfrastructureName, infra.Status.PlatformStatus.AWS.Region, nodePool, targetNamespace, "")
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to generate worker machineset: %w", err)
 		}
@@ -173,13 +173,15 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 		return reconcile.Result{}, fmt.Errorf("error validating autoscaling parameters: %w", err)
 	}
 
+	version := strings.Replace(hcluster.Status.Version.History[0].Version, ".", "", -1)
+
 	// Generate scalable resource for nodePool
 	targetNamespace := hcluster.GetName()
 	scalableResource, AWSMachineTemplate, err := generateScalableResources(r, ctx,
 		infra.Status.InfrastructureName,
 		infra.Status.PlatformStatus.AWS.Region,
 		nodePool,
-		targetNamespace)
+		targetNamespace, version)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to generate worker machineset: %w", err)
 	}
@@ -207,6 +209,24 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 		return ctrl.Result{}, err
 	}
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, scalableResource, func() error {
+		// Update maxUnavailable and maxSurge parameters
+		maxUnavailable := intstr.FromInt(nodePool.Spec.Management.MaxUnavailable)
+		maxSurge := intstr.FromInt(nodePool.Spec.Management.MaxSurge)
+		scalableResource.Spec.Strategy.RollingUpdate.MaxUnavailable = &maxUnavailable
+		scalableResource.Spec.Strategy.RollingUpdate.MaxSurge = &maxSurge
+
+		// Update the Bootstrap.DataSecretName when AutoUpgrade is signaled
+		// TODO (alberto): Fetch the AMI for the current version
+		// once this is available via release payload https://github.com/openshift/enhancements/pull/201
+		if nodePool.Spec.Management.AutoUpgrade || nodePool.Status.Version == "" {
+			version := strings.Replace(hcluster.Status.Version.History[0].Version, ".", "", -1)
+			scalableResource.Spec.Template.Spec.Bootstrap.DataSecretName = k8sutilspointer.StringPtr(fmt.Sprintf("user-data-%s", version))
+
+			nodePool.Status.Version = hcluster.Status.Version.History[0].Version
+
+			// TODO: TEST IT!
+		}
+
 		if !isAutoscalingEnabled {
 			scalableResource.Spec.Replicas = &wantedReplicas
 			scalableResource.Annotations[autoscalerMaxAnnotation] = "0"
@@ -236,6 +256,7 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 			log.Info("Requeueing nodePool", "expected available nodes", *nodePool.Spec.NodeCount, "current available nodes", nodePool.Status.NodeCount)
 			return ctrl.Result{Requeue: true}, nil
 		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -269,7 +290,7 @@ func GetHostedClusterByName(ctx context.Context, c client.Client, namespace, nam
 }
 
 func generateScalableResources(client ctrlclient.Client, ctx context.Context,
-	infraName, region string, nodePool *hyperv1.NodePool, targetNamespace string) (*capiv1.MachineDeployment, *capiaws.AWSMachineTemplate, error) {
+	infraName, region string, nodePool *hyperv1.NodePool, targetNamespace, version string) (*capiv1.MachineDeployment, *capiaws.AWSMachineTemplate, error) {
 	// find AMI
 	machineSets := &unstructured.UnstructuredList{}
 	machineSets.SetGroupVersionKind(schema.GroupVersionKind{
@@ -325,7 +346,7 @@ func generateScalableResources(client ctrlclient.Client, ctx context.Context,
 
 	instanceType := nodePool.Spec.Platform.AWS.InstanceType
 	resourcesName := generateName(infraName, nodePool.Spec.ClusterName, nodePool.GetName())
-	dataSecretName := fmt.Sprintf("%s-user-data", nodePool.Spec.ClusterName)
+	dataSecretName := fmt.Sprintf("user-data-%s", version)
 
 	AWSMachineTemplate := &capiaws.AWSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{},

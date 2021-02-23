@@ -39,6 +39,7 @@ type PKIParams struct {
 }
 
 type ClusterParams struct {
+	VersionURLCompliant     string      `json:"versionURLCompliant"`
 	Namespace               string      `json:"namespace"`
 	ExternalAPIDNSName      string      `json:"externalAPIDNSName"`
 	ExternalAPIAddress      string      `json:"externalAPIAddress"`

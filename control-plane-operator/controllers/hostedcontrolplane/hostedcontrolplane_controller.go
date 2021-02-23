@@ -359,8 +359,17 @@ func (r *HostedControlPlaneReconciler) ensureInfrastructure(ctx context.Context,
 		return status, fmt.Errorf("cannot create router shard: %w", err)
 	}
 
+	// TODO (alberto) store releaseImage in the reconciler resource.
+	releaseImage, err := r.ReleaseProvider.Lookup(ctx, hcp.Spec.ReleaseImage)
+	if err != nil {
+		return status, err
+	}
 	r.Log.Info("Creating ignition provider route")
-	ignitionRoute := createIgnitionServerRoute(targetNamespace)
+	version := releaseImage.Version()
+	versionURLCompliant := strings.Replace(version, ".", "", -1)
+
+	r.Log.Info("Creating ignition provider route", "LOL", versionURLCompliant)
+	ignitionRoute := createIgnitionServerRoute(targetNamespace, versionURLCompliant)
 	ignitionRoute.OwnerReferences = ensureHCPOwnerRef(hcp, ignitionRoute.OwnerReferences)
 	if err := r.Create(ctx, ignitionRoute); err != nil && !apierrors.IsAlreadyExists(err) {
 		return status, fmt.Errorf("failed to create ignition route: %w", err)
@@ -445,7 +454,8 @@ func (r *HostedControlPlaneReconciler) ensureControlPlane(ctx context.Context, h
 	}
 	r.Log.Info("successfully applied all manifests")
 
-	userDataSecret := generateUserDataSecret(hcp.GetName(), hcp.GetNamespace(), infraStatus.IgnitionProviderAddress, version)
+	versionURLCompliant := strings.Replace(releaseImage.Version(), ".", "", -1)
+	userDataSecret := generateUserDataSecret(hcp.GetNamespace(), infraStatus.IgnitionProviderAddress, version, versionURLCompliant)
 	if err := r.Create(ctx, userDataSecret); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to generate user data secret: %w", err)
 	}
@@ -552,6 +562,10 @@ func (r *HostedControlPlaneReconciler) generateControlPlaneManifests(ctx context
 	params.ControllerAvailabilityPolicy = render.SingleReplica
 	params.SSHKey = string(sshKeyData)
 	params.HypershiftOperatorControllers = []string{"route-sync", "auto-approver", "kubeadmin-password", "node"}
+
+	version := releaseImage.Version()
+	versionURLCompliant := strings.Replace(version, ".", "", -1)
+	params.VersionURLCompliant = versionURLCompliant
 
 	// Generate PKI data just once and store it in a secret. PKI generation isn't
 	// deterministic and shouldn't be performed with every reconcile, otherwise
@@ -811,16 +825,16 @@ func ensureDefaultIngressControllerSelector(c client.Client) error {
 	return nil
 }
 
-func createIgnitionServerRoute(namespace string) *routev1.Route {
+func createIgnitionServerRoute(namespace, version string) *routev1.Route {
 	return &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      "ignition-provider",
+			Name:      fmt.Sprintf("ignition-provider-%s", version),
 		},
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
-				Name: "machine-config-server",
+				Name: fmt.Sprintf("machine-config-server-%s", version),
 			},
 		},
 	}
@@ -940,9 +954,9 @@ func applyManifests(ctx context.Context, c client.Client, log logr.Logger, names
 	return nil
 }
 
-func generateUserDataSecret(name, namespace string, ignitionProviderAddr string, version semver.Version) *corev1.Secret {
+func generateUserDataSecret(namespace string, ignitionProviderAddr string, version semver.Version, versionURLCompliant string) *corev1.Secret {
 	secret := &corev1.Secret{}
-	secret.Name = fmt.Sprintf("%s-user-data", name)
+	secret.Name = fmt.Sprintf("user-data-%s", versionURLCompliant)
 	secret.Namespace = namespace
 
 	disableTemplatingValue := []byte(base64.StdEncoding.EncodeToString([]byte("true")))

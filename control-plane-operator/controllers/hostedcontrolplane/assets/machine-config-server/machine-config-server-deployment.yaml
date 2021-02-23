@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: machine-config-server
+  name: machine-config-server-{{ .VersionURLCompliant }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: machine-config-server
+      app: machine-config-server-{{ .VersionURLCompliant }}
   template:
     metadata:
       labels:
-        app: machine-config-server
+        app: machine-config-server-{{ .VersionURLCompliant }}
     spec:
       tolerations:
         - key: "multi-az-worker"
@@ -62,7 +62,7 @@ spec:
         - mountPath: /assets/manifests
           name: config
       - image: {{ imageFor "cli" }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         name: inject-custom-machine-configs
         env:
         - name: NAMESPACE

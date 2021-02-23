@@ -38,7 +38,11 @@ type NodePoolSpec struct {
 	NodeCount *int32 `json:"nodeCount"`
 	// +optional
 	AutoScaling *NodePoolAutoScaling `json:"autoScaling,omitempty"`
-	Platform    NodePoolPlatform     `json:"platform"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default={autoUpgrade: true, maxSurge: 1, maxUnavailable: 0}
+	Management NodePoolManagement `json:"nodePoolManagement"`
+	Platform   NodePoolPlatform   `json:"platform"`
 }
 
 // NodePoolStatus defines the observed state of NodePool
@@ -47,6 +51,13 @@ type NodePoolStatus struct {
 	// +optional
 	NodeCount  int                `json:"nodeCount"`
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// Version is the semantic version of the release applied by
+	// the hosted control plane operator.
+	// For a nodePool a given version dictates the ignition config and
+	// an image artifact e.g an AMI in AWS.
+	// +kubebuilder:validation:Optional
+	Version string `json:"version,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -55,6 +66,17 @@ type NodePoolList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []NodePool `json:"items"`
+}
+
+type NodePoolManagement struct {
+	// +kubebuilder:default=true
+	AutoUpgrade bool `json:"autoUpgrade"`
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	MaxUnavailable int `json:"maxUnavailable"`
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	MaxSurge int `json:"maxSurge"`
 }
 
 type NodePoolAutoScaling struct {
