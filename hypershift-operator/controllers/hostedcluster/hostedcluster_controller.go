@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/ignitionserver"
+
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -410,6 +412,11 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile control plane operator: %w", err)
 	}
 
+	// Reconcile the Ignition server
+	if err = r.reconcileIgnitionServer(ctx, hcluster, hcp); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile ignition server: %w", err)
+	}
+
 	r.Log.Info("successfully reconciled")
 	return ctrl.Result{}, nil
 }
@@ -637,6 +644,37 @@ func (r *HostedClusterReconciler) reconcileControlPlaneOperator(ctx context.Cont
 	if err != nil {
 		return fmt.Errorf("failed to reconcile controlplane operator deployment: %w", err)
 	}
+
+	return nil
+}
+
+func (r *HostedClusterReconciler) reconcileIgnitionServer(ctx context.Context, hcluster *hyperv1.HostedCluster, hcp *hyperv1.HostedControlPlane) error {
+	controlPlaneNamespace := manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name)
+	err := r.Client.Get(ctx, client.ObjectKeyFromObject(controlPlaneNamespace), controlPlaneNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get control plane namespace: %w", err)
+	}
+
+	// Reconcile service
+	// TODO (alberto): enable nodePort choice at the hostedClusterAPI
+	ignitionServerService := ignitionserver.Service(controlPlaneNamespace.Name)
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, ignitionServerService, func() error {
+		ignitionserver.ReconcileServiceClusterIP(ignitionServerService)
+		return nil
+	})
+
+	// Reconcile route
+	ignitionServerRoute := ignitionserver.Route(controlPlaneNamespace.Name)
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, ignitionServerRoute, func() error {
+		ignitionServerRoute = ignitionserver.Route(controlPlaneNamespace.Name)
+		return nil
+	})
+
+	// Reconcile deployment
+	ignitionServerDeployment := ignitionserver.Deployment(controlPlaneNamespace.Name)
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, ignitionServerDeployment, func() error {
+		return ignitionserver.ReconcileDeployment(ignitionServerDeployment, "quay.io/enxebre/hs:ign")
+	})
 
 	return nil
 }
