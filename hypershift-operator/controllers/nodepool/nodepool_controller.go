@@ -61,10 +61,10 @@ const (
 	nodePoolAnnotationCurrentConfig         = "hypershift.openshift.io/nodePoolCurrentConfig"
 	nodePoolAnnotationCurrentConfigVersion  = "hypershift.openshift.io/nodePoolCurrentConfigVersion"
 	nodePoolAnnotationCurrentProviderConfig = "hypershift.openshift.io/nodePoolCurrentProviderConfig"
+	nodePoolCoreIgnitionConfigLabel         = "hypershift.openshift.io/core-ignition-config"
 	TokenSecretReleaseKey                   = "release"
 	TokenSecretTokenKey                     = "token"
 	TokenSecretConfigKey                    = "config"
-	TokenSecretAnnotation                   = "hypershift.openshift.io/ignition-config"
 )
 
 type NodePoolReconciler struct {
@@ -613,7 +613,6 @@ func reconcileTokenSecret(tokenSecret *corev1.Secret, nodePool *hyperv1.NodePool
 	if tokenSecret.Annotations == nil {
 		tokenSecret.Annotations = make(map[string]string)
 	}
-	tokenSecret.Annotations[TokenSecretAnnotation] = "true"
 	tokenSecret.Annotations[nodePoolAnnotation] = ctrlclient.ObjectKeyFromObject(nodePool).String()
 
 	if tokenSecret.Data == nil {
@@ -856,8 +855,18 @@ func (r *NodePoolReconciler) getConfig(ctx context.Context, nodePool *hyperv1.No
 		return "", nil
 	}
 
+	var configs []corev1.ConfigMap
 	allConfigPlainText := ""
 	var errors []error
+
+	configMapList := &corev1.ConfigMapList{}
+	if err := r.List(ctx, configMapList, client.MatchingLabels{
+		nodePoolCoreIgnitionConfigLabel: "true",
+	}); err != nil {
+		errors = append(errors, err)
+	}
+	configs = configMapList.Items
+
 	for _, config := range nodePool.Spec.Config {
 		configConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -869,10 +878,13 @@ func (r *NodePoolReconciler) getConfig(ctx context.Context, nodePool *hyperv1.No
 			errors = append(errors, err)
 			continue
 		}
+		configs = append(configs, *configConfigMap)
+	}
 
-		manifest := configConfigMap.Data[TokenSecretConfigKey]
+	for _, config := range configs {
+		manifest := config.Data[TokenSecretConfigKey]
 		if err := validateConfigManifest([]byte(manifest)); err != nil {
-			errors = append(errors, fmt.Errorf("configmap %q failed validation: %w", configConfigMap.Name, err))
+			errors = append(errors, fmt.Errorf("configmap %q failed validation: %w", config.Name, err))
 			continue
 		}
 
