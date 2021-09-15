@@ -1979,6 +1979,7 @@ func reconcileCAPIAWSProviderDeployment(deployment *appsv1.Deployment, hc *hyper
 							"--alsologtostderr",
 							"--v=4",
 							"--leader-elect=true",
+							"--feature-gates=EKS=false",
 						},
 						Ports: []corev1.ContainerPort{
 							{
