@@ -57,7 +57,7 @@ import (
 	"github.com/openshift/hypershift/support/upsert"
 	"github.com/openshift/hypershift/support/util"
 	prometheusoperatorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"gopkg.in/square/go-jose.v2"
+	jose "gopkg.in/square/go-jose.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -860,6 +860,11 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		controlPlaneNamespace.Name,
 		hcp.Status.ControlPlaneEndpoint)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// TODO (alberto): drop this once this is fixed upstream https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/2864.
+	if err := r.reconcileAWSSubnets(ctx, createOrUpdate, infraCR, req.Namespace, req.Name); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -3745,5 +3750,37 @@ func (r *HostedClusterReconciler) reconcileAWSResourceTags(ctx context.Context, 
 		return fmt.Errorf("failed to update AWS resource tags: %w", err)
 	}
 
+	return nil
+}
+
+func (r *HostedClusterReconciler) reconcileAWSSubnets(ctx context.Context, createOrUpdate upsert.CreateOrUpdateFN,
+	infraCR client.Object, namespace, clusterName string) error {
+	awsInfraCR, ok := infraCR.(*capiawsv1.AWSCluster)
+	if !ok {
+		return nil
+	}
+
+	nodePools, err := r.listNodePools(namespace, clusterName)
+	if err != nil {
+		return fmt.Errorf("failed to get nodePools by cluster name for cluster %q: %w", clusterName, err)
+	}
+	subnets := capiawsv1.Subnets{}
+	for _, nodePool := range nodePools {
+		if nodePool.Spec.Platform.AWS != nil &&
+			nodePool.Spec.Platform.AWS.Subnet != nil &&
+			nodePool.Spec.Platform.AWS.Subnet.ID != nil {
+			subnet := capiawsv1.SubnetSpec{
+				ID: *nodePool.Spec.Platform.AWS.Subnet.ID,
+			}
+			subnets = append(subnets, subnet)
+		}
+	}
+	_, err = createOrUpdate(ctx, r.Client, awsInfraCR, func() error {
+		awsInfraCR.Spec.NetworkSpec.Subnets = subnets
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reconcile networks for CAPA Infra CR: %w", err)
+	}
 	return nil
 }
