@@ -1002,11 +1002,6 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile ignition server: %w", err)
 	}
 
-	// Reconcile the machine config server
-	if err = r.reconcileMachineConfigServer(ctx, createOrUpdate, hcluster); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to reconcile machine config server: %w", err)
-	}
-
 	if err = r.reconcileMachineApprover(ctx, createOrUpdate, hcluster, hcp); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile machine approver: %w", err)
 	}
