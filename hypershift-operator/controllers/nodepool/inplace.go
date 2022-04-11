@@ -8,8 +8,6 @@ import (
 
 	api "github.com/openshift/hypershift/api"
 	hyperv1 "github.com/openshift/hypershift/api/v1alpha1"
-	hcpmanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
-	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests"
 	hyperutil "github.com/openshift/hypershift/hypershift-operator/controllers/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -198,13 +196,13 @@ func inPlaceUpgradeComplete(nodes []*corev1.Node, targetVersionConfig string) bo
 
 func hostedClusterRESTConfig(ctx context.Context, c client.Reader, hc *hyperv1.HostedCluster) (*restclient.Config, error) {
 	// TODO (alberto): Use a tailored kubeconfig.
-	hostedControlPlaneNamespace := manifests.HostedControlPlaneNamespace(hc.Namespace, hc.Name).Name
-	kubeconfigSecret := hcpmanifests.KASServiceCAPIKubeconfigSecret(hostedControlPlaneNamespace, hc.Spec.InfraID)
-	if err := c.Get(ctx, client.ObjectKeyFromObject(kubeconfigSecret), kubeconfigSecret); err != nil {
+	kubeconfig := hc.Status.KubeConfig
+	kubeconfigSecret := &corev1.Secret{}
+	if err := c.Get(ctx, client.ObjectKey{Name: kubeconfig.Name, Namespace: hc.Namespace}, kubeconfigSecret); err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig secret %q: %w", kubeconfigSecret.Name, err)
 	}
 
-	kubeConfig, ok := kubeconfigSecret.Data["value"]
+	kubeConfig, ok := kubeconfigSecret.Data["kubeconfig"]
 	if !ok {
 		return nil, fmt.Errorf("kubeconfig secret %q does not have 'value' key", kubeconfigSecret.Name)
 	}
