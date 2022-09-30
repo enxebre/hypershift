@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/hypershift/support/proxy"
-	"github.com/openshift/hypershift/support/rhobsmonitoring"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/blang/semver"
 	routev1 "github.com/openshift/api/route/v1"
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
@@ -16,6 +12,8 @@ import (
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/kas"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
+	"github.com/openshift/hypershift/support/proxy"
+	"github.com/openshift/hypershift/support/rhobsmonitoring"
 	"github.com/openshift/hypershift/support/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilpointer "k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const operatorName = "cluster-network-operator"
@@ -332,6 +331,14 @@ func ReconcileDeployment(dep *appsv1.Deployment, params Params, apiPort *int32) 
 			util.HCPRouteLabel, dep.Namespace,
 			util.InternalRouteLabel, "true"),
 		})
+	}
+
+	var proxyVars []corev1.EnvVar
+	proxy.SetEnvVars(&proxyVars)
+	// CNO requires the proxy values to deploy cloud network config controller in the management cluster,
+	// but it should not use the proxy itself, hence the prefix
+	for _, v := range proxyVars {
+		cnoEnv = append(cnoEnv, corev1.EnvVar{Name: fmt.Sprintf("MGMT_%s", v.Name), Value: v.Value})
 	}
 
 	var proxyVars []corev1.EnvVar
