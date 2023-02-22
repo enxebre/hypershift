@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sutilspointer "k8s.io/utils/pointer"
 	capiaws "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
@@ -67,7 +69,18 @@ func awsMachineTemplateSpec(infraName, ami string, hostedCluster *hyperv1.Hosted
 			Filters: filters,
 		})
 	}
-	if len(securityGroups) == 0 && defaultSG {
+
+	// Check if the HCP had perms to create the SG.
+	// Otherwise we let the process continue. This will let the NodePool use the VPC default security group.
+	// With out this existing environments with no updated permissions would hang forever waiting for the SG.
+	// TODO (alberto): remove this fallback as we create clean environments pre-GA.
+	hasPermsForSG := true
+	sgCreated := meta.FindStatusCondition(hostedCluster.Status.Conditions, string(hyperv1.AWSDefaultSecurityGroupCreated))
+	if sgCreated != nil && sgCreated.Status == metav1.ConditionFalse && sgCreated.Reason == hyperv1.AWSErrorReason {
+		hasPermsForSG = false
+	}
+
+	if len(securityGroups) == 0 && defaultSG && hasPermsForSG {
 		if hostedCluster.Status.Platform == nil || hostedCluster.Status.Platform.AWS == nil || hostedCluster.Status.Platform.AWS.DefaultWorkerSecurityGroupID == "" {
 			return nil, &NotReadyError{fmt.Errorf("the default security group for the HostedCluster has not been created")}
 		}
