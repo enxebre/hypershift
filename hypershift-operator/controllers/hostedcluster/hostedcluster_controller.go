@@ -1455,17 +1455,15 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile capi provider: %w", err)
 	}
 
-	// Get release image version, if needed
+	// Get release image version
 	var releaseImageVersion semver.Version
-	if !controlPlaneOperatorManagesMachineAutoscaler || !controlPlaneOperatorManagesMachineApprover || !controlplaneOperatorManagesIgnitionServer {
-		releaseInfo, err := r.ReleaseProvider.Lookup(ctx, hcluster.Spec.Release.Image, pullSecretBytes)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to lookup release image: %w", err)
-		}
-		releaseImageVersion, err = semver.Parse(releaseInfo.Version())
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to parse release image version: %w", err)
-		}
+	releaseInfo, err := r.ReleaseProvider.Lookup(ctx, hcluster.Spec.Release.Image, pullSecretBytes)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to lookup release image: %w", err)
+	}
+	releaseImageVersion, err = semver.Parse(releaseInfo.Version())
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to parse release image version: %w", err)
 	}
 
 	// In >= 4.11 We want to move most of the components reconciliation down to the CPO https://issues.redhat.com/browse/HOSTEDCP-375.
@@ -1531,7 +1529,7 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Reconcile the network policies
-	if err = r.reconcileNetworkPolicies(ctx, createOrUpdate, hcluster, hcp); err != nil {
+	if err = r.reconcileNetworkPolicies(ctx, createOrUpdate, hcluster, hcp, releaseImageVersion); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile network policies: %w", err)
 	}
 
@@ -1836,9 +1834,10 @@ func (r *HostedClusterReconciler) reconcileCAPIProvider(ctx context.Context, cre
 	// Reconcile CAPI provider deployment
 	deployment := clusterapi.CAPIProviderDeployment(controlPlaneNamespace.Name)
 	labels := map[string]string{
-		"control-plane":               "capi-provider-controller-manager",
-		"app":                         "capi-provider-controller-manager",
-		hyperv1.ControlPlaneComponent: "capi-provider-controller-manager",
+		"control-plane":                     "capi-provider-controller-manager",
+		"app":                               "capi-provider-controller-manager",
+		hyperv1.ControlPlaneComponent:       "capi-provider-controller-manager",
+		config.NeedManagementKASAccessLabel: "true",
 	}
 	_, err = createOrUpdate(ctx, r.Client, deployment, func() error {
 		// Enforce provider specifics.
@@ -2329,6 +2328,9 @@ func reconcileControlPlaneOperatorDeployment(
 			PriorityClass: config.DefaultPriorityClass,
 		},
 		SetDefaultSecurityContext: setDefaultSecurityContext,
+		AdditionalLabels: map[string]string{
+			config.NeedManagementKASAccessLabel: "true",
+		},
 	}
 	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
 		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
@@ -2712,6 +2714,9 @@ func reconcileCAPIManagerDeployment(deployment *appsv1.Deployment, hc *hyperv1.H
 			PriorityClass: config.DefaultPriorityClass,
 		},
 		SetDefaultSecurityContext: setDefaultSecurityContext,
+		AdditionalLabels: map[string]string{
+			config.NeedManagementKASAccessLabel: "true",
+		},
 	}
 	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
 		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
