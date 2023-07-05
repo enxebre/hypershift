@@ -12,7 +12,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilpointer "k8s.io/utils/pointer"
 )
@@ -60,21 +59,17 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 		AvailabilityProberImage: releaseImageProvider.GetImage(util.AvailabilityProberImageName),
 	}
 
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"dns-operator",
+		utilpointer.Int(1),
+		false,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
 	p.DeploymentConfig.AdditionalAnnotations = map[string]string{
 		"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
 	}
-	p.DeploymentConfig.AdditionalLabels = map[string]string{
-		"name":                        "dns-operator",
-		"app":                         "dns-operator",
-		hyperv1.ControlPlaneComponent: "dns-operator",
-	}
-	p.DeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	p.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	p.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	return p
 }
@@ -105,9 +100,6 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 // require any special proxy configuration or permissions in the management
 // cluster.
 func ReconcileDeployment(dep *appsv1.Deployment, params Params, apiPort *int32) {
-	dep.Spec.Selector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{"name": "dns-operator"},
-	}
 	dep.Spec.Template.Spec.AutomountServiceAccountToken = utilpointer.Bool(false)
 	dep.Spec.Template.Spec.Containers = []corev1.Container{{
 		Args: []string{

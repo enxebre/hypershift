@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilpointer "k8s.io/utils/pointer"
 )
@@ -49,17 +48,15 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 		OwnerRef:       config.OwnerRefFrom(hcp),
 	}
 
-	p.DeploymentConfig.AdditionalLabels = map[string]string{
-		config.NeedManagementKASAccessLabel: "true",
-	}
-	p.DeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	p.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		operatorName,
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 
-	p.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 	p.HostedClusterName = hcp.Name
 
 	return p
@@ -176,23 +173,10 @@ func ReconcileServiceAccount(sa *corev1.ServiceAccount, ownerRef config.OwnerRef
 
 func ReconcileDeployment(dep *appsv1.Deployment, params Params) error {
 	params.OwnerRef.ApplyTo(dep)
-	dep.Spec.Selector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"name": operatorName,
-		},
-	}
 	if dep.Spec.Template.Annotations == nil {
 		dep.Spec.Template.Annotations = map[string]string{}
 	}
 	dep.Spec.Template.Annotations["target.workload.openshift.io/management"] = `{"effect": "PreferredDuringScheduling"}`
-	if dep.Spec.Template.Labels == nil {
-		dep.Spec.Template.Labels = map[string]string{}
-	}
-	dep.Spec.Template.Labels = map[string]string{
-		"name":                        operatorName,
-		"app":                         operatorName,
-		hyperv1.ControlPlaneComponent: operatorName,
-	}
 
 	ntoArgs := []string{
 		"-v=0",

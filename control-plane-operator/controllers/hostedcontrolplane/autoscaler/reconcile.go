@@ -67,25 +67,8 @@ func ReconcileAutoscalerDeployment(deployment *appsv1.Deployment, hcp *hyperv1.H
 		args = append(args, arg)
 	}
 
-	labels := map[string]string{
-		"app":                         "cluster-autoscaler",
-		hyperv1.ControlPlaneComponent: "cluster-autoscaler",
-	}
-	// The selector needs to be invariant for the lifecycle of the project as it's an immutable field,
-	// otherwise changing would prevent an upgrade from happening.
-	selector := map[string]string{
-		"app": "cluster-autoscaler",
-	}
-
 	deployment.Spec = appsv1.DeploymentSpec{
-		Replicas: k8sutilspointer.Int32(1),
-		Selector: &metav1.LabelSelector{
-			MatchLabels: selector,
-		},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: labels,
-			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName:            sa.Name,
 				TerminationGracePeriodSeconds: k8sutilspointer.Int64(10),
@@ -179,21 +162,14 @@ func ReconcileAutoscalerDeployment(deployment *appsv1.Deployment, hcp *hyperv1.H
 
 	util.AvailabilityProber(kas.InClusterKASReadyURL(deployment.Namespace, util.APIPort(hcp)), availabilityProberImage, &deployment.Spec.Template.Spec)
 
-	deploymentConfig := config.DeploymentConfig{
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		SetDefaultSecurityContext: setDefaultSecurityContext,
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-
-	deploymentConfig.SetDefaults(hcp, nil, k8sutilspointer.Int(1))
-	deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+	deploymentConfig := config.NewDeploymentConfig(hcp,
+		"cluster-autoscaler",
+		k8sutilspointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 	deploymentConfig.ApplyTo(deployment)
 
 	return nil

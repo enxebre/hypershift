@@ -3,6 +3,8 @@ package scheduler
 import (
 	"context"
 
+	utilpointer "k8s.io/utils/pointer"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -36,12 +38,15 @@ func NewKubeSchedulerParams(ctx context.Context, hcp *hyperv1.HostedControlPlane
 		params.Scheduler = hcp.Spec.Configuration.Scheduler
 		params.APIServer = hcp.Spec.Configuration.APIServer
 	}
-	params.Scheduling = config.Scheduling{
-		PriorityClass: config.DefaultPriorityClass,
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"kube-scheduler",
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	params.Resources = map[string]corev1.ResourceRequirements{
 		schedulerContainerMain().Name: {
 			Requests: corev1.ResourceList{
@@ -82,9 +87,6 @@ func NewKubeSchedulerParams(ctx context.Context, hcp *hyperv1.HostedControlPlane
 			TimeoutSeconds:      5,
 		},
 	}
-	params.DeploymentConfig.SetDefaults(hcp, labels, nil)
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.SetDefaultSecurityContext = setDefaultSecurityContext
 	params.DisableProfiling = util.StringListContains(hcp.Annotations[hyperv1.DisableProfilingAnnotation], manifests.SchedulerDeployment("").Name)
 
 	params.OwnerRef = config.OwnerRefFrom(hcp)

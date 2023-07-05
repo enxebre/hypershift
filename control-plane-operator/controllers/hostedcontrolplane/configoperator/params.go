@@ -34,11 +34,17 @@ func NewHostedClusterConfigOperatorParams(ctx context.Context, hcp *hyperv1.Host
 		KubernetesVersion:       kubernetesVersion,
 		AvailabilityProberImage: releaseImageProvider.GetImage(util.AvailabilityProberImageName),
 	}
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"hosted-cluster-config-operator",
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	params.Scheduling = config.Scheduling{
 		PriorityClass: config.DefaultPriorityClass,
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
 	}
 	params.Resources = map[string]corev1.ResourceRequirements{
 		hccContainerMain().Name: {
@@ -81,13 +87,6 @@ func NewHostedClusterConfigOperatorParams(ctx context.Context, hcp *hyperv1.Host
 			TimeoutSeconds:      5,
 		},
 	}
-
-	params.DeploymentConfig.AdditionalLabels = map[string]string{
-		config.NeedManagementKASAccessLabel: "true",
-	}
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	return params
 }

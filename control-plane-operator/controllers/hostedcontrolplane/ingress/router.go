@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilpointer "k8s.io/utils/pointer"
 
@@ -33,16 +32,20 @@ func hcpRouterLabels() map[string]string {
 }
 
 func HCPRouterConfig(hcp *hyperv1.HostedControlPlane, setDefaultSecurityContext bool) config.DeploymentConfig {
-	cfg := config.DeploymentConfig{
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-		Resources: config.ResourcesSpec{
-			hcpRouterContainerMain().Name: {
-				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("256Mi"),
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-				},
+	cfg := *config.NewDeploymentConfig(hcp,
+		"private-router",
+		nil,
+		setDefaultSecurityContext,
+		true,
+		config.APICriticalPriorityClass,
+		true,
+	)
+
+	cfg.Resources = config.ResourcesSpec{
+		hcpRouterContainerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+				corev1.ResourceCPU:    resource.MustParse("100m"),
 			},
 		},
 	}
@@ -76,10 +79,7 @@ func HCPRouterConfig(hcp *hyperv1.HostedControlPlane, setDefaultSecurityContext 
 			TimeoutSeconds:   1,
 		},
 	}
-	cfg.Scheduling.PriorityClass = config.APICriticalPriorityClass
-	cfg.SetDefaults(hcp, hcpRouterLabels(), nil)
-	cfg.SetRestartAnnotation(hcp.ObjectMeta)
-	cfg.SetDefaultSecurityContext = setDefaultSecurityContext
+
 	return cfg
 }
 
@@ -99,13 +99,7 @@ func ReconcileRouterTemplateConfigmap(cm *corev1.ConfigMap) {
 
 func ReconcileRouterDeployment(deployment *appsv1.Deployment, ownerRef config.OwnerRef, deploymentConfig config.DeploymentConfig, image string, canonicalHostname string, exposeAPIServerThroughRouter bool, isPrivateOnly bool) error {
 	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: &metav1.LabelSelector{
-			MatchLabels: hcpRouterLabels(),
-		},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: hcpRouterLabels(),
-			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					util.BuildContainer(hcpRouterContainerMain(), buildHCPRouterContainerMain(image, deployment.Namespace, canonicalHostname, exposeAPIServerThroughRouter, isPrivateOnly)),

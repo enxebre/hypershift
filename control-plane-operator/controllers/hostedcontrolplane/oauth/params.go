@@ -94,12 +94,16 @@ func NewOAuthServerParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider 
 		p.APIServer = hcp.Spec.Configuration.APIServer
 		p.OAuth = hcp.Spec.Configuration.OAuth
 	}
-	p.Scheduling = config.Scheduling{
-		PriorityClass: config.APICriticalPriorityClass,
-	}
-	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
-		p.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
-	}
+
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"oauth-openshift",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	p.Resources = map[string]corev1.ResourceRequirements{
 		oauthContainerMain().Name: {
 			Requests: corev1.ResourceList{
@@ -140,8 +144,6 @@ func NewOAuthServerParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider 
 			SuccessThreshold:    1,
 		},
 	}
-	p.DeploymentConfig.SetDefaults(hcp, oauthServerLabels, nil)
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
 
 	p.OauthConfigOverrides = map[string]*ConfigOverride{}
 	for annotationKey, annotationValue := range hcp.Annotations {
@@ -159,8 +161,6 @@ func NewOAuthServerParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider 
 			p.LoginURLOverride = annotationValue
 		}
 	}
-
-	p.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	if hcp.Spec.Platform.Type == hyperv1.IBMCloudPlatform {
 		p.NoProxy = append(p.NoProxy, "iam.cloud.ibm.com", "iam.test.cloud.ibm.com")

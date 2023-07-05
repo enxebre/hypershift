@@ -117,12 +117,7 @@ func NewKubeAPIServerParams(ctx context.Context, hcp *hyperv1.HostedControlPlane
 	default:
 		params.EtcdURL = config.DefaultEtcdURL
 	}
-	params.Scheduling = config.Scheduling{
-		PriorityClass: config.APICriticalPriorityClass,
-	}
-	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
-		params.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
-	}
+
 	baseLivenessProbeConfig := corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -296,9 +291,14 @@ func NewKubeAPIServerParams(ctx context.Context, hcp *hyperv1.HostedControlPlane
 	params.KubeConfigRef = hcp.Spec.KubeConfig
 	params.OwnerRef = config.OwnerRefFrom(hcp)
 
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.DeploymentConfig.SetDefaults(hcp, kasLabels(), nil)
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"kube-apiserver",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.APICriticalPriorityClass,
+		true,
+	)
 
 	return params
 }

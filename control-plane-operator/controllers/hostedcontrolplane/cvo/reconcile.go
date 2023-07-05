@@ -116,18 +116,8 @@ func ReconcileDeployment(deployment *appsv1.Deployment, ownerRef config.OwnerRef
 	if mainContainer != nil {
 		deploymentConfig.SetContainerResourcesIfPresent(mainContainer)
 	}
-	selector := deployment.Spec.Selector
-	if selector == nil {
-		selector = &metav1.LabelSelector{
-			MatchLabels: cvoLabels(),
-		}
-	}
 	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: selector,
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: cvoLabels(),
-			},
 			Spec: corev1.PodSpec{
 				AutomountServiceAccountToken: pointer.Bool(false),
 				InitContainers: []corev1.Container{

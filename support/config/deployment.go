@@ -34,6 +34,7 @@ const (
 )
 
 type DeploymentConfig struct {
+	Name                      string
 	Replicas                  int                   `json:"replicas"`
 	Scheduling                Scheduling            `json:"scheduling"`
 	AdditionalLabels          AdditionalLabels      `json:"additionalLabels"`
@@ -121,6 +122,13 @@ func (c *DeploymentConfig) ApplyTo(deployment *appsv1.Deployment) {
 	if len(localStorageVolumes) > 0 {
 		annotationsVolumes := strings.Join(localStorageVolumes, ",")
 		deployment.Spec.Template.ObjectMeta.Annotations[PodSafeToEvictLocalVolumesKey] = annotationsVolumes
+	}
+
+	// Selector field is immutable, keep if if exists.
+	if deployment.Spec.Selector == nil || deployment.Spec.Selector.MatchLabels == nil {
+		deployment.Spec.Selector.MatchLabels = map[string]string{
+			"app": c.Name,
+		}
 	}
 
 	c.Scheduling.ApplyTo(&deployment.Spec.Template.Spec)
@@ -296,21 +304,68 @@ func (c *DeploymentConfig) setReplicas(availability hyperv1.AvailabilityPolicy) 
 	}
 }
 
-// SetDefaults populates opinionated default DeploymentConfig for any Deployment.
-func (c *DeploymentConfig) SetDefaults(hcp *hyperv1.HostedControlPlane, multiZoneSpreadLabels map[string]string, replicas *int) {
+// NewDeploymentConfig populates returns an opinionated DeploymentConfig for any Deployment.
+// TODO(alberto): consider inverse and centralise the dependency injection. I.e. pass only the name in the signature
+// and let this function choose defaults based on name groups.
+// E.g. If name in kas, etcd... then priorityClass critical
+func NewDeploymentConfig(hcp *hyperv1.HostedControlPlane,
+	name string,
+	replicas *int,
+	setDefaultSecurityContext bool,
+	needManagementKASAccessLabel bool,
+	priorityClass string,
+	setRestartAnnotation bool,
+) *DeploymentConfig {
+	deploymentConfig := &DeploymentConfig{
+		SetDefaultSecurityContext: setDefaultSecurityContext,
+	}
+
+	if deploymentConfig.AdditionalLabels == nil {
+		deploymentConfig.AdditionalLabels = make(AdditionalLabels)
+	}
+
+	if needManagementKASAccessLabel {
+		deploymentConfig.AdditionalLabels[NeedManagementKASAccessLabel] = "true"
+	}
+
+	if setRestartAnnotation {
+		deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+	}
+
+	deploymentConfig.Scheduling.PriorityClass = priorityClass
+	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
+		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
+	}
+
+	idLabels := func() map[string]string {
+		return map[string]string{
+			"app":                         name,
+			"name":                        name,
+			"k8s-app":                     name,
+			hyperv1.ControlPlaneComponent: name,
+		}
+	}
+
+	for k, v := range idLabels() {
+		deploymentConfig.AdditionalLabels[k] = v
+	}
+
 	// If no replicas is specified then infer it from the ControllerAvailabilityPolicy.
 	if replicas == nil {
-		c.setReplicas(hcp.Spec.ControllerAvailabilityPolicy)
+		deploymentConfig.setReplicas(hcp.Spec.ControllerAvailabilityPolicy)
 	} else {
-		c.Replicas = *replicas
+		deploymentConfig.Replicas = *replicas
 	}
-	c.DebugDeployments = debugDeployments(hcp)
+	deploymentConfig.DebugDeployments = debugDeployments(hcp)
 
-	c.ResourceRequestOverrides = resourceRequestOverrides(hcp)
+	deploymentConfig.ResourceRequestOverrides = resourceRequestOverrides(hcp)
 
-	c.setLocation(hcp, multiZoneSpreadLabels)
+	deploymentConfig.setLocation(hcp, idLabels())
+
 	// TODO (alberto): make this private, atm is needed for the konnectivity agent daemonset.
-	c.SetReleaseImageAnnotation(hcp.Spec.ReleaseImage)
+	deploymentConfig.SetReleaseImageAnnotation(hcp.Spec.ReleaseImage)
+
+	return deploymentConfig
 }
 
 func resourceRequestOverrides(hcp *hyperv1.HostedControlPlane) ResourceOverrides {

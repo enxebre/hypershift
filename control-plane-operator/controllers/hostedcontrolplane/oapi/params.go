@@ -68,108 +68,103 @@ func NewOpenShiftAPIServerParams(hcp *hyperv1.HostedControlPlane, observedConfig
 		params.AuditWebhookRef = hcp.Spec.AuditWebhook
 	}
 
-	params.OpenShiftAPIServerDeploymentConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.APICriticalPriorityClass,
-		},
-		LivenessProbes: config.LivenessProbes{
-			oasContainerMain().Name: {
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Scheme: corev1.URISchemeHTTPS,
-						Port:   intstr.FromInt(int(OpenShiftAPIServerPort)),
-						Path:   "healthz",
-					},
+	params.OpenShiftAPIServerDeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"openshift-apiserver",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.APICriticalPriorityClass,
+		true,
+	)
+	params.OpenShiftAPIServerDeploymentConfig.LivenessProbes = config.LivenessProbes{
+		oasContainerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTPS,
+					Port:   intstr.FromInt(int(OpenShiftAPIServerPort)),
+					Path:   "healthz",
 				},
-				InitialDelaySeconds: 30,
-				TimeoutSeconds:      10,
-				PeriodSeconds:       10,
-				FailureThreshold:    3,
-				SuccessThreshold:    1,
 			},
+			InitialDelaySeconds: 30,
+			TimeoutSeconds:      10,
+			PeriodSeconds:       10,
+			FailureThreshold:    3,
+			SuccessThreshold:    1,
 		},
-		ReadinessProbes: config.ReadinessProbes{
-			oasContainerMain().Name: {
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Scheme: corev1.URISchemeHTTPS,
-						Port:   intstr.FromInt(int(OpenShiftAPIServerPort)),
-						Path:   "healthz",
-					},
+	}
+	params.OpenShiftAPIServerDeploymentConfig.ReadinessProbes = config.ReadinessProbes{
+		oasContainerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTPS,
+					Port:   intstr.FromInt(int(OpenShiftAPIServerPort)),
+					Path:   "healthz",
 				},
-				TimeoutSeconds:   1,
-				PeriodSeconds:    10,
-				SuccessThreshold: 1,
-				FailureThreshold: 10,
 			},
+			TimeoutSeconds:   1,
+			PeriodSeconds:    10,
+			SuccessThreshold: 1,
+			FailureThreshold: 10,
 		},
-		Resources: map[string]corev1.ResourceRequirements{
-			oasContainerMain().Name: {
-				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("200Mi"),
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-				},
+	}
+	params.OpenShiftAPIServerDeploymentConfig.Resources = map[string]corev1.ResourceRequirements{
+		oasContainerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("200Mi"),
+				corev1.ResourceCPU:    resource.MustParse("100m"),
 			},
 		},
 	}
-	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
-		params.OpenShiftAPIServerDeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
-	}
-	params.OpenShiftAPIServerDeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.OpenShiftAPIServerDeploymentConfig.SetDefaults(hcp, openShiftAPIServerLabels(), nil)
 
-	params.OpenShiftOAuthAPIServerDeploymentConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.APICriticalPriorityClass,
-		},
-		LivenessProbes: config.LivenessProbes{
-			oauthContainerMain().Name: {
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Scheme: corev1.URISchemeHTTPS,
-						Port:   intstr.FromInt(int(OpenShiftOAuthAPIServerPort)),
-						Path:   "healthz",
-					},
-				},
-				InitialDelaySeconds: 30,
-				TimeoutSeconds:      1,
-				PeriodSeconds:       10,
-				FailureThreshold:    3,
-				SuccessThreshold:    1,
-			},
-		},
-		ReadinessProbes: config.ReadinessProbes{
-			oauthContainerMain().Name: {
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Scheme: corev1.URISchemeHTTPS,
-						Port:   intstr.FromInt(int(OpenShiftOAuthAPIServerPort)),
-						Path:   "readyz",
-					},
-				},
-				TimeoutSeconds:   1,
-				PeriodSeconds:    10,
-				SuccessThreshold: 1,
-				FailureThreshold: 10,
-			},
-		},
-		Resources: map[string]corev1.ResourceRequirements{
-			oauthContainerMain().Name: {
-				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("80Mi"),
-					corev1.ResourceCPU:    resource.MustParse("150m"),
-				},
-			},
-		},
-	}
-	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
-		params.OpenShiftOAuthAPIServerDeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
-	}
-	params.OpenShiftAPIServerDeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
-	params.OpenShiftOAuthAPIServerDeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
+	params.OpenShiftOAuthAPIServerDeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"openshift-oauth-apiserver",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.APICriticalPriorityClass,
+		true,
+	)
 
-	params.OpenShiftOAuthAPIServerDeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.OpenShiftOAuthAPIServerDeploymentConfig.SetDefaults(hcp, openShiftOAuthAPIServerLabels(), nil)
+	params.OpenShiftOAuthAPIServerDeploymentConfig.LivenessProbes = config.LivenessProbes{
+		oauthContainerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTPS,
+					Port:   intstr.FromInt(int(OpenShiftOAuthAPIServerPort)),
+					Path:   "healthz",
+				},
+			},
+			InitialDelaySeconds: 30,
+			TimeoutSeconds:      1,
+			PeriodSeconds:       10,
+			FailureThreshold:    3,
+			SuccessThreshold:    1,
+		},
+	}
+	params.OpenShiftOAuthAPIServerDeploymentConfig.ReadinessProbes = config.ReadinessProbes{
+		oauthContainerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTPS,
+					Port:   intstr.FromInt(int(OpenShiftOAuthAPIServerPort)),
+					Path:   "readyz",
+				},
+			},
+			TimeoutSeconds:   1,
+			PeriodSeconds:    10,
+			SuccessThreshold: 1,
+			FailureThreshold: 10,
+		},
+	}
+	params.OpenShiftOAuthAPIServerDeploymentConfig.Resources = map[string]corev1.ResourceRequirements{
+		oauthContainerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("80Mi"),
+				corev1.ResourceCPU:    resource.MustParse("150m"),
+			},
+		},
+	}
+
 	switch hcp.Spec.Etcd.ManagementType {
 	case hyperv1.Unmanaged:
 		params.EtcdURL = hcp.Spec.Etcd.Unmanaged.Endpoint

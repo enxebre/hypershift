@@ -3,6 +3,7 @@ package clusterpolicy
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	utilpointer "k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
@@ -28,26 +29,23 @@ func NewClusterPolicyControllerParams(hcp *hyperv1.HostedControlPlane, releaseIm
 	if hcp.Spec.Configuration != nil {
 		params.APIServer = hcp.Spec.Configuration.APIServer
 	}
-	params.DeploymentConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		Resources: map[string]corev1.ResourceRequirements{
-			cpcContainerMain().Name: {
-				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("200Mi"),
-					corev1.ResourceCPU:    resource.MustParse("10m"),
-				},
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"cluster-policy-controller",
+		utilpointer.Int(1),
+		false,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
+	params.DeploymentConfig.Resources = map[string]corev1.ResourceRequirements{
+		cpcContainerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("200Mi"),
+				corev1.ResourceCPU:    resource.MustParse("10m"),
 			},
 		},
 	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.DeploymentConfig.SetDefaults(hcp, clusterPolicyControllerLabels, nil)
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
-
 	params.OwnerRef = config.OwnerRefFrom(hcp)
 
 	return params

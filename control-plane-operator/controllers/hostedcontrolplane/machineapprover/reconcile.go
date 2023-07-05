@@ -93,24 +93,11 @@ func ReconcileMachineApproverDeployment(deployment *appsv1.Deployment, hcp *hype
 		"--disable-status-controller",
 	}
 
-	labels := map[string]string{
-		"app":                         "machine-approver",
-		hyperv1.ControlPlaneComponent: "machine-approver",
-	}
-	// The selector needs to be invariant for the lifecycle of the project as it's an immutable field,
-	// otherwise changing would prevent an upgrade from happening.
-	selector := map[string]string{
-		"app": "machine-approver",
-	}
 	deployment.Spec = appsv1.DeploymentSpec{
 		Replicas: k8sutilspointer.Int32(1),
-		Selector: &metav1.LabelSelector{
-			MatchLabels: selector,
-		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: labels,
-				Name:   "machine-approver",
+				Name: "machine-approver",
 			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: sa.Name,
@@ -201,20 +188,14 @@ func ReconcileMachineApproverDeployment(deployment *appsv1.Deployment, hcp *hype
 
 	util.AvailabilityProber(kas.InClusterKASReadyURL(deployment.Namespace, util.APIPort(hcp)), availabilityProberImage, &deployment.Spec.Template.Spec)
 
-	deploymentConfig := config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		SetDefaultSecurityContext: setDefaultSecurityContext,
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	deploymentConfig.SetDefaults(hcp, nil, k8sutilspointer.Int(1))
-	deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+	deploymentConfig := config.NewDeploymentConfig(hcp,
+		"machine-approver",
+		k8sutilspointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 	deploymentConfig.ApplyTo(deployment)
 
 	return nil

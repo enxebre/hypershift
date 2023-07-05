@@ -7,7 +7,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 
@@ -61,12 +60,6 @@ func ReconcileDeployment(deployment *appsv1.Deployment, ownerRef config.OwnerRef
 		MaxSurge:       &maxSurge,
 		MaxUnavailable: &maxUnavailable,
 	}
-	if deployment.Spec.Selector == nil {
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: openShiftControllerManagerLabels(),
-		}
-	}
-	deployment.Spec.Template.ObjectMeta.Labels = openShiftControllerManagerLabels()
 	deployment.Spec.Template.ObjectMeta.Annotations = map[string]string{
 		configHashAnnotation: configHash,
 	}

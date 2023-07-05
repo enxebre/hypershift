@@ -35,6 +35,16 @@ func NewKonnectivityParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider
 		ExternalPort:            externalPort,
 		OwnerRef:                config.OwnerRefFrom(hcp),
 	}
+
+	p.ServerDeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"konnectivity-server",
+		pointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	p.ServerDeploymentConfig.LivenessProbes = config.LivenessProbes{
 		konnectivityServerContainer().Name: {
 			ProbeHandler: corev1.ProbeHandler{
@@ -75,13 +85,15 @@ func NewKonnectivityParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider
 			},
 		},
 	}
-	p.ServerDeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.ServerDeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.ServerDeploymentConfig.SetDefaults(hcp, nil, pointer.Int(1))
-	p.ServerDeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
 
+	p.AgentDeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"konnectivity-agent",
+		pointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
 	p.AgentDeploymentConfig.Resources = config.ResourcesSpec{
 		konnectivityAgentContainer().Name: {
 			Requests: corev1.ResourceList{
@@ -90,10 +102,7 @@ func NewKonnectivityParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider
 			},
 		},
 	}
-	p.AgentDeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.AgentDeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
+
 	p.AgentDeploymentConfig.LivenessProbes = config.LivenessProbes{
 		konnectivityAgentContainer().Name: {
 			ProbeHandler: corev1.ProbeHandler{
@@ -111,8 +120,6 @@ func NewKonnectivityParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider
 		},
 	}
 
-	p.AgentDeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	p.AgentDeploymentConfig.SetDefaults(hcp, konnectivityAgentLabels(), nil)
 	p.AgentDeamonSetConfig.Resources = config.ResourcesSpec{
 		konnectivityAgentContainer().Name: {
 			Requests: corev1.ResourceList{
@@ -143,8 +150,6 @@ func NewKonnectivityParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider
 
 	// non root security context if scc capability is missing
 	p.AgentDeamonSetConfig.SetDefaultSecurityContext = setDefaultSecurityContext
-	p.AgentDeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
-	p.ServerDeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 	// check apiserver-network-proxy image in ocp payload and use it
 	if image, exist := releaseImageProvider.ImageExist("apiserver-network-proxy"); exist {
 		p.KonnectivityServerImage = image

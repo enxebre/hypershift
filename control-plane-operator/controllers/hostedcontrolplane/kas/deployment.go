@@ -122,11 +122,6 @@ func ReconcileKubeAPIServerDeployment(deployment *appsv1.Deployment,
 	if mainContainer != nil {
 		deploymentConfig.SetContainerResourcesIfPresent(mainContainer)
 	}
-	if deployment.Spec.Selector == nil {
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: kasLabels(),
-		}
-	}
 
 	clusterFeatureGate := configv1.FeatureGate{
 		TypeMeta: metav1.TypeMeta{
@@ -148,7 +143,6 @@ func ReconcileKubeAPIServerDeployment(deployment *appsv1.Deployment,
 
 	deployment.Spec.Template = corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: kasLabels(),
 			Annotations: map[string]string{
 				configHashAnnotation: configHash,
 			},

@@ -40,6 +40,16 @@ func NewEtcdParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider *imagep
 		OwnerRef:     config.OwnerRefFrom(hcp),
 		Availability: hcp.Spec.ControllerAvailabilityPolicy,
 	}
+
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"etcd",
+		nil,
+		false,
+		false,
+		config.EtcdPriorityClass,
+		true,
+	)
+
 	p.DeploymentConfig.Resources = config.ResourcesSpec{
 		etcdContainer().Name: {
 			Requests: corev1.ResourceList{
@@ -51,12 +61,6 @@ func NewEtcdParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider *imagep
 	if p.DeploymentConfig.AdditionalLabels == nil {
 		p.DeploymentConfig.AdditionalLabels = make(map[string]string)
 	}
-	p.DeploymentConfig.AdditionalLabels[hyperv1.ControlPlaneComponent] = "etcd"
-	p.DeploymentConfig.Scheduling.PriorityClass = config.EtcdPriorityClass
-	if hcp.Annotations[hyperv1.EtcdPriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.EtcdPriorityClass]
-	}
-	p.DeploymentConfig.SetDefaults(hcp, etcdPodSelector(), nil)
 
 	if hcp.Spec.Etcd.Managed == nil {
 		hcp.Spec.Etcd.Managed = &hyperv1.ManagedEtcdSpec{

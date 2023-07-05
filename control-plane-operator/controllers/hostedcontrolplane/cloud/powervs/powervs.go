@@ -15,6 +15,7 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/support/config"
 	supportconfig "github.com/openshift/hypershift/support/config"
 )
 
@@ -23,7 +24,6 @@ const (
 	kubeConfigFileBasePath = "/etc/kubernetes"
 	secretMountPath        = "/etc/vpc"
 	ccmConfigMapMountPath  = "/etc/ibm"
-	replicas               = 1
 )
 
 const ccmConfigTemplateData = `
@@ -98,7 +98,6 @@ func ReconcileCCMDeployment(deployment *appsv1.Deployment, hcp *hyperv1.HostedCo
 	}
 
 	deployment.Spec = appsv1.DeploymentSpec{
-		Replicas: utilpointer.Int32(int32(replicas)),
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{"k8s-app": deployment.Name},
 		},
@@ -205,14 +204,14 @@ func ReconcileCCMDeployment(deployment *appsv1.Deployment, hcp *hyperv1.HostedCo
 		},
 	}
 
-	deploymentConfig := supportconfig.DeploymentConfig{
-		Scheduling: supportconfig.Scheduling{
-			PriorityClass: supportconfig.DefaultPriorityClass,
-		},
-		SetDefaultSecurityContext: setDefaultSecurityContext,
-	}
-
-	deploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(replicas))
+	deploymentConfig := supportconfig.NewDeploymentConfig(hcp,
+		"cloud-controller-manager",
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		false,
+	)
 	deploymentConfig.ApplyTo(deployment)
 
 	return nil

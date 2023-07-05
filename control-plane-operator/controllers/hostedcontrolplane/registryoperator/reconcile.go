@@ -9,7 +9,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 
@@ -108,86 +107,78 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 		releaseVersion:   version,
 		registryImage:    releaseImageProvider.GetImage("docker-registry"),
 		prunerImage:      releaseImageProvider.GetImage("cli"),
-		deploymentConfig: config.DeploymentConfig{
-			Scheduling: config.Scheduling{
-				PriorityClass: config.DefaultPriorityClass,
-			},
-			SetDefaultSecurityContext: setDefaultSecurityContext,
-			ReadinessProbes: config.ReadinessProbes{
-				containerMain().Name: {
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Path:   "/metrics",
-							Port:   intstr.FromInt(metricsPort),
-							Scheme: corev1.URISchemeHTTPS,
-						},
-					},
-					InitialDelaySeconds: 15,
-					PeriodSeconds:       60,
-					SuccessThreshold:    1,
-					FailureThreshold:    3,
-					TimeoutSeconds:      5,
+		deploymentConfig: *config.NewDeploymentConfig(hcp,
+			operatorName,
+			pointer.Int(1),
+			setDefaultSecurityContext,
+			true,
+			config.DefaultPriorityClass,
+			true,
+		),
+	}
+
+	params.deploymentConfig.ReadinessProbes = config.ReadinessProbes{
+		containerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/metrics",
+					Port:   intstr.FromInt(metricsPort),
+					Scheme: corev1.URISchemeHTTPS,
 				},
 			},
-			LivenessProbes: config.LivenessProbes{
-				containerMain().Name: {
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Path:   "/metrics",
-							Port:   intstr.FromInt(metricsPort),
-							Scheme: corev1.URISchemeHTTPS,
-						},
-					},
-					InitialDelaySeconds: 60,
-					PeriodSeconds:       60,
-					SuccessThreshold:    1,
-					FailureThreshold:    5,
-					TimeoutSeconds:      5,
+			InitialDelaySeconds: 15,
+			PeriodSeconds:       60,
+			SuccessThreshold:    1,
+			FailureThreshold:    3,
+			TimeoutSeconds:      5,
+		},
+	}
+	params.deploymentConfig.LivenessProbes = config.LivenessProbes{
+		containerMain().Name: {
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/metrics",
+					Port:   intstr.FromInt(metricsPort),
+					Scheme: corev1.URISchemeHTTPS,
 				},
 			},
-			Resources: config.ResourcesSpec{
-				containerMain().Name: {
-					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("50Mi"),
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-					},
-				},
-				containerClientTokenMinter().Name: {
-					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-						corev1.ResourceMemory: resource.MustParse("10Mi"),
-					},
-				},
-				containerWebIdentityTokenMinter().Name: {
-					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-						corev1.ResourceMemory: resource.MustParse("10Mi"),
-					},
-				},
+			InitialDelaySeconds: 60,
+			PeriodSeconds:       60,
+			SuccessThreshold:    1,
+			FailureThreshold:    5,
+			TimeoutSeconds:      5,
+		},
+	}
+	params.deploymentConfig.Resources = config.ResourcesSpec{
+		containerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+			},
+		},
+		containerClientTokenMinter().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("10Mi"),
+			},
+		},
+		containerWebIdentityTokenMinter().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("10Mi"),
 			},
 		},
 	}
-	params.deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	params.deploymentConfig.SetDefaults(hcp, selectorLabels(), pointer.Int(1))
-	params.deploymentConfig.SetReleaseImageAnnotation(hcp.Spec.ReleaseImage)
+
 	return params
 }
 
 func ReconcileDeployment(deployment *appsv1.Deployment, params Params) error {
 	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: &metav1.LabelSelector{
-			MatchLabels: selectorLabels(),
-		},
 		Strategy: appsv1.DeploymentStrategy{
 			Type: appsv1.RecreateDeploymentStrategyType,
 		},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: selectorLabels(),
-			},
 			Spec: corev1.PodSpec{
 				AutomountServiceAccountToken: pointer.Bool(false),
 				Containers: []corev1.Container{

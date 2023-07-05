@@ -27,25 +27,23 @@ func NewOpenShiftRouteControllerManagerParams(hcp *hyperv1.HostedControlPlane, o
 		params.APIServer = hcp.Spec.Configuration.APIServer
 	}
 
-	params.DeploymentConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		Resources: map[string]corev1.ResourceRequirements{
-			routeOCMContainerMain().Name: {
-				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("100Mi"),
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-				},
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"openshift-route-controller-manager",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
+	params.DeploymentConfig.Resources = map[string]corev1.ResourceRequirements{
+		routeOCMContainerMain().Name: {
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+				corev1.ResourceCPU:    resource.MustParse("100m"),
 			},
 		},
 	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.DeploymentConfig.SetDefaults(hcp, openShiftRouteControllerManagerLabels(), nil)
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	params.OwnerRef = config.OwnerRefFrom(hcp)
 	return params

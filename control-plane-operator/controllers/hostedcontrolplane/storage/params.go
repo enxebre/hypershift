@@ -39,18 +39,15 @@ func NewParams(
 		ImageReplacer:           ir,
 		APIPort:                 util.APIPort(hcp),
 	}
-	params.DeploymentConfig = config.DeploymentConfig{
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-	}
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
-	// Run only one replica of the operator
-	params.DeploymentConfig.Scheduling = config.Scheduling{
-		PriorityClass: config.DefaultPriorityClass,
-	}
-	params.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		storageOperatorImageName,
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 
 	return &params
 }

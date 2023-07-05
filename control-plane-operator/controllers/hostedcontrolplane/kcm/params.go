@@ -55,12 +55,15 @@ func NewKubeControllerManagerParams(ctx context.Context, hcp *hyperv1.HostedCont
 		params.APIServer = hcp.Spec.Configuration.APIServer
 	}
 
-	params.Scheduling = config.Scheduling{
-		PriorityClass: config.DefaultPriorityClass,
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"kube-controller-manager",
+		nil,
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	params.DisableProfiling = util.StringListContains(hcp.Annotations[hyperv1.DisableProfilingAnnotation], manifests.KCMDeployment("").Name)
 	params.LivenessProbes = config.LivenessProbes{
 		kcmContainerMain().Name: {
@@ -102,16 +105,12 @@ func NewKubeControllerManagerParams(ctx context.Context, hcp *hyperv1.HostedCont
 			},
 		},
 	}
-	params.DeploymentConfig.SetDefaults(hcp, kcmLabels(), nil)
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
 
 	switch hcp.Spec.Platform.Type {
 	case hyperv1.AzurePlatform:
 		params.CloudProvider = azure.Provider
 		params.CloudProviderConfig = &corev1.LocalObjectReference{Name: manifests.AzureProviderConfigWithCredentials("").Name}
 	}
-
-	params.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	params.OwnerRef = config.OwnerRefFrom(hcp)
 	return params

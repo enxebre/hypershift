@@ -16,7 +16,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilpointer "k8s.io/utils/pointer"
@@ -52,13 +51,16 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 		AvailabilityProberImage: releaseImageProvider.GetImage(util.AvailabilityProberImageName),
 		Platform:                platform,
 	}
-	p.DeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	p.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	p.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
+
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		operatorName,
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	p.DeploymentConfig.ReadinessProbes = config.ReadinessProbes{
 		ingressOperatorContainerName: {
 			ProbeHandler: corev1.ProbeHandler{
@@ -97,20 +99,11 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 
 func ReconcileDeployment(dep *appsv1.Deployment, params Params, apiPort *int32) {
 	dep.Spec.Replicas = utilpointer.Int32(1)
-	dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"name": operatorName}}
 	dep.Spec.Strategy.Type = appsv1.RecreateDeploymentStrategyType
 	if dep.Spec.Template.Annotations == nil {
 		dep.Spec.Template.Annotations = map[string]string{}
 	}
 	dep.Spec.Template.Annotations["target.workload.openshift.io/management"] = `{"effect": "PreferredDuringScheduling"}`
-	if dep.Spec.Template.Labels == nil {
-		dep.Spec.Template.Labels = map[string]string{}
-	}
-	dep.Spec.Template.Labels = map[string]string{
-		"name":                        operatorName,
-		"app":                         operatorName,
-		hyperv1.ControlPlaneComponent: operatorName,
-	}
 
 	dep.Spec.Template.Spec.AutomountServiceAccountToken = utilpointer.Bool(false)
 	dep.Spec.Template.Spec.Containers = []corev1.Container{{

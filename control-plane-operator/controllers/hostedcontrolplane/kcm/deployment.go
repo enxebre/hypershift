@@ -8,7 +8,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 
@@ -69,11 +68,6 @@ func ReconcileDeployment(deployment *appsv1.Deployment, config, rootCA, serviceS
 		p.DeploymentConfig.SetContainerResourcesIfPresent(mainContainer)
 	}
 
-	if deployment.Spec.Selector == nil {
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: kcmLabels(),
-		}
-	}
 	deployment.Spec.Strategy.Type = appsv1.RollingUpdateDeploymentStrategyType
 	maxSurge := intstr.FromInt(3)
 	maxUnavailable := intstr.FromInt(1)
@@ -84,9 +78,6 @@ func ReconcileDeployment(deployment *appsv1.Deployment, config, rootCA, serviceS
 	}
 	if deployment.Spec.Template.ObjectMeta.Labels == nil {
 		deployment.Spec.Template.ObjectMeta.Labels = map[string]string{}
-	}
-	for k, v := range kcmLabels() {
-		deployment.Spec.Template.ObjectMeta.Labels[k] = v
 	}
 
 	configBytes, ok := config.Data[KubeControllerManagerConfigKey]

@@ -31,6 +31,16 @@ func NewCVOParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider *imagepr
 		ClusterID:               hcp.Spec.ClusterID,
 		PlatformType:            hcp.Spec.Platform.Type,
 	}
+
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"cluster-version-operator",
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	p.DeploymentConfig.Resources = config.ResourcesSpec{
 		cvoContainerPrepPayload().Name: {
 			Requests: corev1.ResourceList{
@@ -45,13 +55,6 @@ func NewCVOParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider *imagepr
 			},
 		},
 	}
-	p.DeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	p.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	p.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 
 	return p
 }

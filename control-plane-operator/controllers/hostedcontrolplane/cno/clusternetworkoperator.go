@@ -25,7 +25,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilpointer "k8s.io/utils/pointer"
 )
@@ -110,17 +109,16 @@ func NewParams(hcp *hyperv1.HostedControlPlane, version string, releaseImageProv
 		DefaultIngressDomain:    defaultIngressDomain,
 	}
 
-	p.DeploymentConfig.AdditionalLabels = map[string]string{
-		config.NeedManagementKASAccessLabel: "true",
-	}
-	p.DeploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
+	p.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		operatorName,
+		utilpointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	// No support for multus-admission-controller at the moment. TODO: add support after https://issues.redhat.com/browse/OCPBUGS-7942 is resolved.
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		p.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	p.DeploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
-	p.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 	if util.IsPrivateHCP(hcp) {
 		p.APIServerAddress = fmt.Sprintf("api.%s.hypershift.local", hcp.Name)
 		p.APIServerPort = util.InternalAPIPortWithDefault(hcp, config.DefaultAPIServerPort)
@@ -276,7 +274,6 @@ func ReconcileDeployment(dep *appsv1.Deployment, params Params, apiPort *int32) 
 	params.OwnerRef.ApplyTo(dep)
 
 	dep.Spec.Replicas = utilpointer.Int32(1)
-	dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"name": operatorName}}
 	dep.Spec.Strategy.Type = appsv1.RecreateDeploymentStrategyType
 	if dep.Spec.Template.Annotations == nil {
 		dep.Spec.Template.Annotations = map[string]string{}
@@ -285,12 +282,6 @@ func ReconcileDeployment(dep *appsv1.Deployment, params Params, apiPort *int32) 
 	if dep.Spec.Template.Labels == nil {
 		dep.Spec.Template.Labels = map[string]string{}
 	}
-	dep.Spec.Template.Labels = map[string]string{
-		"name":                        operatorName,
-		"app":                         operatorName,
-		hyperv1.ControlPlaneComponent: operatorName,
-	}
-
 	cnoArgs := []string{"start",
 		"--listen=0.0.0.0:9104",
 		"--kubeconfig=/etc/hosted-kubernetes/kubeconfig",

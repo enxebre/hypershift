@@ -37,29 +37,24 @@ func NewOperatorLifecycleManagerParams(hcp *hyperv1.HostedControlPlane, releaseI
 		NoProxy:                 []string{"kube-apiserver"},
 		OwnerRef:                config.OwnerRefFrom(hcp),
 	}
-	params.DeploymentConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		params.DeploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	params.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.DeploymentConfig.SetDefaults(hcp, nil, pointer.Int(1))
-	params.DeploymentConfig.SetDefaultSecurityContext = setDefaultSecurityContext
 
-	params.PackageServerConfig = config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.APICriticalPriorityClass,
-		},
-	}
-	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
-		params.PackageServerConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
-	}
-	params.PackageServerConfig.SetDefaults(hcp, packageServerLabels, nil)
-	params.PackageServerConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	params.PackageServerConfig.SetDefaultSecurityContext = setDefaultSecurityContext
+	params.DeploymentConfig = *config.NewDeploymentConfig(hcp,
+		"olm-operator",
+		pointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
+	params.PackageServerConfig = *config.NewDeploymentConfig(hcp,
+		"packageserver",
+		pointer.Int(1),
+		setDefaultSecurityContext,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
 
 	if hcp.Spec.OLMCatalogPlacement == "management" {
 		params.NoProxy = append(params.NoProxy, "certified-operators", "community-operators", "redhat-operators", "redhat-marketplace")

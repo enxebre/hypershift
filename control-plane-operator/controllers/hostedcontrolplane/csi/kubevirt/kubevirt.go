@@ -468,10 +468,16 @@ func ReconcileInfra(client crclient.Client, hcp *hyperv1.HostedControlPlane, ctx
 		return nil
 	}
 
-	deploymentConfig := &config.DeploymentConfig{}
+	deploymentConfig := config.NewDeploymentConfig(hcp,
+		"kubevirt-csi-driver",
+		utilpointer.Int(1),
+		false,
+		false,
+		config.DefaultPriorityClass,
+		true,
+	)
+
 	deploymentConfig.Scheduling.PriorityClass = config.DefaultPriorityClass
-	deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
-	deploymentConfig.SetDefaults(hcp, nil, utilpointer.Int(1))
 
 	infraNamespace := hcp.Namespace
 

@@ -1833,12 +1833,6 @@ func (r *HostedClusterReconciler) reconcileCAPIProvider(ctx context.Context, cre
 
 	// Reconcile CAPI provider deployment
 	deployment := clusterapi.CAPIProviderDeployment(controlPlaneNamespace.Name)
-	labels := map[string]string{
-		"control-plane":                     "capi-provider-controller-manager",
-		"app":                               "capi-provider-controller-manager",
-		hyperv1.ControlPlaneComponent:       "capi-provider-controller-manager",
-		config.NeedManagementKASAccessLabel: "true",
-	}
 	_, err = createOrUpdate(ctx, r.Client, deployment, func() error {
 		// Enforce provider specifics.
 		deployment.Spec = *capiProviderDeploymentSpec
@@ -1848,26 +1842,16 @@ func (r *HostedClusterReconciler) reconcileCAPIProvider(ctx context.Context, cre
 			deployment.Spec.Template.Spec.Containers[i].ImagePullPolicy = corev1.PullIfNotPresent
 		}
 
-		// Enforce labels.
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: labels,
-		}
-		deployment.Spec.Template.Labels = labels
-
 		// Enforce ServiceAccount.
 		deployment.Spec.Template.Spec.ServiceAccountName = capiProviderServiceAccount.Name
-
-		deploymentConfig := config.DeploymentConfig{
-			Scheduling: config.Scheduling{
-				PriorityClass: config.DefaultPriorityClass,
-			},
-			SetDefaultSecurityContext: r.SetDefaultSecurityContext,
-		}
-		if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-			deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-		}
-		deploymentConfig.SetDefaults(hcp, nil, k8sutilspointer.Int(1))
-		deploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
+		deploymentConfig := config.NewDeploymentConfig(hcp,
+			"capi-provider-controller-manager",
+			k8sutilspointer.Int(1),
+			r.SetDefaultSecurityContext,
+			true,
+			config.DefaultPriorityClass,
+			true,
+		)
 		deploymentConfig.ApplyTo(deployment)
 
 		return nil
@@ -2114,19 +2098,7 @@ func reconcileControlPlaneOperatorDeployment(
 	}
 
 	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"name": "control-plane-operator",
-			},
-		},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"name":                        "control-plane-operator",
-					"app":                         "control-plane-operator",
-					hyperv1.ControlPlaneComponent: "control-plane-operator",
-				},
-			},
 			Spec: corev1.PodSpec{
 				ImagePullSecrets: []corev1.LocalObjectReference{
 					{
@@ -2316,27 +2288,14 @@ func reconcileControlPlaneOperatorDeployment(
 		hyperutil.DeploymentAddTrustBundleVolume(hc.Spec.AdditionalTrustBundle, deployment)
 	}
 
-	// set security context
-	if setDefaultSecurityContext {
-		deployment.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
-			RunAsUser: k8sutilspointer.Int64(config.DefaultSecurityContextUser),
-		}
-	}
-
-	deploymentConfig := config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		SetDefaultSecurityContext: setDefaultSecurityContext,
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	deploymentConfig.SetDefaults(hcp, nil, k8sutilspointer.Int(1))
-	deploymentConfig.SetRestartAnnotation(hc.ObjectMeta)
+	deploymentConfig := config.NewDeploymentConfig(hcp,
+		"control-plane-operator",
+		k8sutilspointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 	deploymentConfig.ApplyTo(deployment)
 
 	return nil
@@ -2608,19 +2567,8 @@ func reconcileCAPICluster(cluster *capiv1.Cluster, hcluster *hyperv1.HostedClust
 
 func reconcileCAPIManagerDeployment(deployment *appsv1.Deployment, hc *hyperv1.HostedCluster, hcp *hyperv1.HostedControlPlane, sa *corev1.ServiceAccount, capiManagerImage string, setDefaultSecurityContext bool) error {
 	defaultMode := int32(0640)
-	capiManagerLabels := map[string]string{
-		"name":                        "cluster-api",
-		"app":                         "cluster-api",
-		hyperv1.ControlPlaneComponent: "cluster-api",
-	}
 	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: &metav1.LabelSelector{
-			MatchLabels: capiManagerLabels,
-		},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: capiManagerLabels,
-			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: sa.Name,
 				Volumes: []corev1.Volume{
@@ -2709,20 +2657,14 @@ func reconcileCAPIManagerDeployment(deployment *appsv1.Deployment, hc *hyperv1.H
 		}
 	}
 
-	deploymentConfig := config.DeploymentConfig{
-		Scheduling: config.Scheduling{
-			PriorityClass: config.DefaultPriorityClass,
-		},
-		SetDefaultSecurityContext: setDefaultSecurityContext,
-		AdditionalLabels: map[string]string{
-			config.NeedManagementKASAccessLabel: "true",
-		},
-	}
-	if hcp.Annotations[hyperv1.ControlPlanePriorityClass] != "" {
-		deploymentConfig.Scheduling.PriorityClass = hcp.Annotations[hyperv1.ControlPlanePriorityClass]
-	}
-	deploymentConfig.SetDefaults(hcp, nil, k8sutilspointer.Int(1))
-	deploymentConfig.SetRestartAnnotation(hc.ObjectMeta)
+	deploymentConfig := config.NewDeploymentConfig(hcp,
+		"control-plane-operator",
+		k8sutilspointer.Int(1),
+		setDefaultSecurityContext,
+		true,
+		config.DefaultPriorityClass,
+		true,
+	)
 	deploymentConfig.ApplyTo(deployment)
 
 	return nil
