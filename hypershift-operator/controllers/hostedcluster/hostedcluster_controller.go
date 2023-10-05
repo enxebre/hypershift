@@ -1324,6 +1324,31 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
+	// Reconcile the OIDCCAFile configMap if set.
+	if hcluster.Spec.OIDCAuth != nil && hcluster.Spec.OIDCAuth.OIDCCAFile != nil {
+		var src corev1.ConfigMap
+		err = r.Client.Get(ctx, client.ObjectKey{Namespace: hcluster.Namespace, Name: hcluster.Spec.OIDCAuth.OIDCCAFile.Name}, &src)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to get hostedcluster OIDCCAFile ConfigMap %s: %w", hcluster.Spec.OIDCAuth.OIDCCAFile.Name, err)
+		}
+
+		dest := controlplaneoperator.OIDCCAConfigMap(controlPlaneNamespace.Name)
+		_, err = createOrUpdate(ctx, r.Client, dest, func() error {
+			srcData, srcHasData := src.Data["ca.crt"]
+			if !srcHasData {
+				return fmt.Errorf("hostedcluster configmap %q must have a ca.crt key", src.Name)
+			}
+			if dest.Data == nil {
+				dest.Data = map[string]string{}
+			}
+			dest.Data["ca.crt"] = srcData
+			return nil
+		})
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to reconcile controlplane OIDCCAFile: %w", err)
+		}
+	}
+
 	// Reconcile the service account signing key if set
 	if hcluster.Spec.ServiceAccountSigningKey != nil {
 		if err := r.reconcileServiceAccountSigningKey(ctx, hcluster, controlPlaneNamespace.Name, createOrUpdate); err != nil {

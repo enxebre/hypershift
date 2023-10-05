@@ -48,6 +48,9 @@ type HostedControlPlaneSpec struct {
 	// validation.
 	IssuerURL string `json:"issuerURL"`
 
+	// OIDCAuth contains the input to setup the kube api server to authenticate via an external OIDC provider.
+	OIDCAuth *OIDCAuth `json:"oidcAuth,omitempty"`
+
 	// Networking specifies network configuration for the cluster.
 	// Temporarily optional for backward compatibility, required in future releases.
 	// +optional
@@ -163,6 +166,12 @@ type HostedControlPlaneSpec struct {
 
 // AvailabilityPolicy specifies a high level availability policy for components.
 type AvailabilityPolicy string
+
+type OIDCAuth struct {
+	OIDCIssuerURL string                       `json:"oidcIssuerURL"`
+	OIDCClientID  string                       `json:"oidcClientID"`
+	OIDCCAFile    *corev1.LocalObjectReference `json:"oidcCAFile"`
+}
 
 const (
 	// HighlyAvailable means components should be resilient to problems across

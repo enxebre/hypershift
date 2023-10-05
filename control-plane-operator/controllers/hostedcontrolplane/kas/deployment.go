@@ -60,6 +60,7 @@ var (
 			kasVolumeKubeletClientCert().Name:      "/etc/kubernetes/certs/kubelet",
 			kasVolumeKubeletClientCA().Name:        "/etc/kubernetes/certs/kubelet-ca",
 			kasVolumeKonnectivityClientCert().Name: "/etc/kubernetes/certs/konnectivity-client",
+			kasVolumeOIDCCA().Name:                 "/etc/kubernetes/certs/oidc-ca",
 			kasVolumeEgressSelectorConfig().Name:   "/etc/kubernetes/egress-selector",
 		},
 		konnectivityServerContainer().Name: util.ContainerVolumeMounts{
@@ -216,6 +217,7 @@ func ReconcileKubeAPIServerDeployment(deployment *appsv1.Deployment,
 				util.BuildVolume(kasVolumeAuditConfig(), buildKASVolumeAuditConfig),
 				util.BuildVolume(kasVolumeKonnectivityCA(), buildKASVolumeKonnectivityCA),
 				util.BuildVolume(kasVolumeServerCert(), buildKASVolumeServerCert),
+				util.BuildVolume(kasVolumeOIDCCA(), buildKASVolumeOIDCCA),
 				util.BuildVolume(kasVolumeAggregatorCert(), buildKASVolumeAggregatorCert),
 				util.BuildVolume(common.VolumeAggregatorCA(), common.BuildVolumeAggregatorCA),
 				util.BuildVolume(kasVolumeServiceAccountKey(), buildKASVolumeServiceAccountKey),
@@ -514,11 +516,25 @@ func kasVolumeKonnectivityCA() *corev1.Volume {
 		Name: "konnectivity-ca",
 	}
 }
+
 func buildKASVolumeKonnectivityCA(v *corev1.Volume) {
 	v.ConfigMap = &corev1.ConfigMapVolumeSource{
 		DefaultMode: pointer.Int32(0640),
 	}
 	v.ConfigMap.Name = manifests.KonnectivityCAConfigMap("").Name
+}
+
+func kasVolumeOIDCCA() *corev1.Volume {
+	return &corev1.Volume{
+		Name: "oidc-ca",
+	}
+}
+
+func buildKASVolumeOIDCCA(v *corev1.Volume) {
+	v.ConfigMap = &corev1.ConfigMapVolumeSource{
+		DefaultMode: pointer.Int32(0640),
+	}
+	v.ConfigMap.Name = manifests.OIDCCAConfigMap("").Name
 }
 
 func kasVolumeServerCert() *corev1.Volume {

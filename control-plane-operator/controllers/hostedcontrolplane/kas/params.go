@@ -32,6 +32,11 @@ type KubeAPIServerImages struct {
 }
 
 type KubeAPIServerParams struct {
+	// BYO OIDC input.
+	OIDCIssuerURL string
+	OIDCCAFile    string
+	OIDCClientID  string
+
 	APIServer           *configv1.APIServerSpec      `json:"apiServer"`
 	FeatureGate         *configv1.FeatureGateSpec    `json:"featureGate"`
 	Network             *configv1.NetworkSpec        `json:"network"`
@@ -112,6 +117,12 @@ func NewKubeAPIServerParams(ctx context.Context, hcp *hyperv1.HostedControlPlane
 			KonnectivityServer:         releaseImageProvider.GetImage("apiserver-network-proxy"),
 		},
 	}
+
+	if hcp.Spec.OIDCAuth != nil {
+		params.OIDCIssuerURL = hcp.Spec.OIDCAuth.OIDCIssuerURL
+		params.OIDCClientID = hcp.Spec.OIDCAuth.OIDCClientID
+	}
+
 	if hcp.Spec.Configuration != nil {
 		params.APIServer = hcp.Spec.Configuration.APIServer
 		params.FeatureGate = hcp.Spec.Configuration.FeatureGate
@@ -423,6 +434,9 @@ func (p *KubeAPIServerParams) ConfigParams() KubeAPIServerConfigParams {
 		DefaultNodeSelector:          p.DefaultNodeSelector(),
 		AdvertiseAddress:             p.AdvertiseAddress,
 		ServiceAccountIssuerURL:      p.ServiceAccountIssuerURL(),
+		OIDCIssuerURL:                p.OIDCIssuerURL,
+		OIDCCAFile:                   p.OIDCCAFile,
+		OIDCClientID:                 p.OIDCClientID,
 		CloudProvider:                p.CloudProvider,
 		CloudProviderConfigRef:       p.CloudProviderConfig,
 		EtcdURL:                      p.EtcdURL,
@@ -435,6 +449,9 @@ func (p *KubeAPIServerParams) ConfigParams() KubeAPIServerConfigParams {
 }
 
 type KubeAPIServerConfigParams struct {
+	OIDCIssuerURL                string
+	OIDCCAFile                   string
+	OIDCClientID                 string
 	ExternalIPConfig             *configv1.ExternalIPConfig
 	ClusterNetwork               []string
 	ServiceNetwork               []string

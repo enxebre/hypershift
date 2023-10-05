@@ -349,6 +349,9 @@ type HostedClusterSpec struct {
 	// +kubebuilder:validation:Format=uri
 	IssuerURL string `json:"issuerURL,omitempty"`
 
+	// OIDCAuth contains the input to setup the kube api server to authenticate via an external OIDC provider.
+	OIDCAuth *OIDCAuth `json:"oidcAuth,omitempty"`
+
 	// ServiceAccountSigningKey is a reference to a secret containing the private key
 	// used by the service account token issuer. The secret is expected to contain
 	// a single key named "key". If not specified, a service account signing key will

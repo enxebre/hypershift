@@ -6043,6 +6043,29 @@ spec:
                 description: NodeSelector when specified, must be true for the pods
                   managed by the HostedCluster to be scheduled.
                 type: object
+              oidcAuth:
+                description: OIDCAuth contains the input to setup the kube api server
+                  to authenticate via an external OIDC provider.
+                properties:
+                  oidcCAFile:
+                    description: LocalObjectReference contains enough information
+                      to let you locate the referenced object inside the same namespace.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  oidcClientID:
+                    type: string
+                  oidcIssuerURL:
+                    type: string
+                required:
+                - oidcCAFile
+                - oidcClientID
+                - oidcIssuerURL
+                type: object
               olmCatalogPlacement:
                 default: management
                 description: OLMCatalogPlacement specifies the placement of OLM catalog

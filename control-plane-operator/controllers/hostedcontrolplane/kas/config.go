@@ -197,6 +197,14 @@ func generateConfig(p KubeAPIServerConfigParams, version semver.Version) *kcpv1.
 	args.Set("requestheader-group-headers", "X-Remote-Group")
 	args.Set("requestheader-username-headers", "X-Remote-User")
 	args.Set("runtime-config", "flowcontrol.apiserver.k8s.io/v1alpha1=true")
+
+	if p.OIDCIssuerURL != "" {
+		args.Set("oidc-issuer-url", p.OIDCIssuerURL)
+		args.Set("oidc-client-id", p.OIDCClientID)
+		// TODO: just use user trusted bundle instead?
+		args.Set("oidc-ca-file", cpath(kasVolumeOIDCCA().Name, "ca.crt"))
+	}
+
 	args.Set("service-account-issuer", p.ServiceAccountIssuerURL)
 	args.Set("service-account-jwks-uri", jwksURL(p.ServiceAccountIssuerURL))
 	args.Set("service-account-lookup", "true")
