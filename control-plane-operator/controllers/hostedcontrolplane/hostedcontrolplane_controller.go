@@ -2085,13 +2085,6 @@ func (r *HostedControlPlaneReconciler) reconcileCloudProviderConfig(ctx context.
 			return fmt.Errorf("failed to get Azure credentials secret: %w", err)
 		}
 
-		// We need different configs for KAS/KCM and Kubelet in Nodes
-		cfg := manifests.AzureProviderConfig(hcp.Namespace)
-		if _, err := createOrUpdate(ctx, r, cfg, func() error {
-			return azure.ReconcileCloudConfig(cfg, hcp, credentialsSecret)
-		}); err != nil {
-			return fmt.Errorf("failed to reconcile Azure cloud config: %w", err)
-		}
 		withSecrets := manifests.AzureProviderConfigWithCredentials(hcp.Namespace)
 		if _, err := createOrUpdate(ctx, r, withSecrets, func() error {
 			return azure.ReconcileCloudConfigWithCredentials(withSecrets, hcp, credentialsSecret)
@@ -3686,6 +3679,21 @@ func (r *HostedControlPlaneReconciler) reconcileCloudControllerManager(ctx conte
 		deployment := aws.CCMDeployment(hcp.Namespace)
 		if _, err := createOrUpdate(ctx, r, deployment, func() error {
 			return aws.ReconcileDeployment(deployment, hcp, p.DeploymentConfig, sa.Name, releaseImageProvider)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile %s cloud controller manager deployment: %w", hcp.Spec.Platform.Type, err)
+		}
+	case hyperv1.AzurePlatform:
+		ownerRef := config.OwnerRefFrom(hcp)
+		sa := azure.CCMServiceAccount(hcp.Namespace)
+		if _, err := createOrUpdate(ctx, r, sa, func() error {
+			return azure.ReconcileCCMServiceAccount(sa, ownerRef)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile %s cloud provider service account: %w", hcp.Spec.Platform.Type, err)
+		}
+		p := azure.NewAzureParams(hcp)
+		deployment := azure.CCMDeployment(hcp.Namespace)
+		if _, err := createOrUpdate(ctx, r, deployment, func() error {
+			return azure.ReconcileDeployment(deployment, hcp, p, sa.Name, releaseImageProvider)
 		}); err != nil {
 			return fmt.Errorf("failed to reconcile %s cloud controller manager deployment: %w", hcp.Spec.Platform.Type, err)
 		}

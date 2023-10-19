@@ -9,24 +9,9 @@ import (
 )
 
 const (
-	CloudConfigKey = "cloud.conf"
+	CloudConfigKey = "azure.conf"
 	Provider       = "azure"
 )
-
-// ReconcileCloudConfigWithCredentials reconciles as expected by Nodes Kubelet.
-func ReconcileCloudConfig(cm *corev1.ConfigMap, hcp *hyperv1.HostedControlPlane, credentialsSecret *corev1.Secret) error {
-	cfg := azureConfigWithoutCredentials(hcp, credentialsSecret)
-	serializedConfig, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to serialize cloudconfig: %w", err)
-	}
-	if cm.Data == nil {
-		cm.Data = map[string]string{}
-	}
-	cm.Data[CloudConfigKey] = string(serializedConfig)
-
-	return nil
-}
 
 // ReconcileCloudConfigWithCredentials reconciles as expected by KAS/KCM.
 func ReconcileCloudConfigWithCredentials(secret *corev1.Secret, hcp *hyperv1.HostedControlPlane, credentialsSecret *corev1.Secret) error {
@@ -65,9 +50,11 @@ func azureConfigWithoutCredentials(hcp *hyperv1.HostedControlPlane, credentialsS
 	}
 }
 
-// AzureConfig is a copy of the relevant subset of the upstream type
+// AzureConfig was originally a copy of the relevant subset of the upstream type
 // at https://github.com/kubernetes/kubernetes/blob/30a21e9abdbbeb78d2b7ce59a79e46299ced2742/staging/src/k8s.io/legacy-cloud-providers/azure/azure.go#L123
 // in order to not pick up the huge amount of transient dependencies that type pulls in.
+// Now the source is https://github.com/kubernetes-sigs/cloud-provider-azure/blob/e5d670328a51e31787fc949ddf41a3efcd90d651/examples/out-of-tree/cloud-controller-manager.yaml#L232
+// https://github.com/kubernetes-sigs/cloud-provider-azure/tree/e5d670328a51e31787fc949ddf41a3efcd90d651/pkg/provider/config
 type AzureConfig struct {
 	Cloud                        string `json:"cloud"`
 	TenantID                     string `json:"tenantId"`
