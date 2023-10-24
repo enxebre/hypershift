@@ -9,9 +9,24 @@ import (
 )
 
 const (
-	CloudConfigKey = "azure.conf"
+	CloudConfigKey = "cloud.conf"
 	Provider       = "azure"
 )
+
+// ReconcileCloudConfig reconciles as expected by Nodes Kubelet.
+func ReconcileCloudConfig(cm *corev1.ConfigMap, hcp *hyperv1.HostedControlPlane, credentialsSecret *corev1.Secret) error {
+	cfg := azureConfigWithoutCredentials(hcp, credentialsSecret)
+	serializedConfig, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize cloudconfig: %w", err)
+	}
+	if cm.Data == nil {
+		cm.Data = map[string]string{}
+	}
+	cm.Data[CloudConfigKey] = string(serializedConfig)
+
+	return nil
+}
 
 // ReconcileCloudConfigWithCredentials reconciles as expected by KAS/KCM.
 func ReconcileCloudConfigWithCredentials(secret *corev1.Secret, hcp *hyperv1.HostedControlPlane, credentialsSecret *corev1.Secret) error {

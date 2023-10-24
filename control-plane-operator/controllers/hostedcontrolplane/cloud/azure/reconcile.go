@@ -32,7 +32,7 @@ func ReconcileDeployment(deployment *appsv1.Deployment, hcp *hyperv1.HostedContr
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
-					util.BuildContainer(ccmContainer(), buildCCMContainer(p, releaseImageProvider.GetImage("azure-cloud-controller-manager"))),
+					util.BuildContainer(ccmContainer(), buildCCMContainer(p, releaseImageProvider.GetImage("azure-cloud-controller-manager"), hcp.Namespace)),
 				},
 				Volumes:            []corev1.Volume{},
 				ServiceAccountName: serviceAccountName,
@@ -68,14 +68,15 @@ func podVolumeMounts() util.PodVolumeMounts {
 	}
 }
 
-func buildCCMContainer(p *AzureParams, controllerManagerImage string) func(c *corev1.Container) {
+// TODO (Alberto): move all signature input into params?
+func buildCCMContainer(p *AzureParams, controllerManagerImage, namespace string) func(c *corev1.Container) {
 	return func(c *corev1.Container) {
 		c.Image = controllerManagerImage
 		c.ImagePullPolicy = corev1.PullIfNotPresent
-		c.Command = []string{"/bin/aws-cloud-controller-manager"}
+		c.Command = []string{"/bin/azure-cloud-controller-manager"}
 		c.Args = []string{
 			"--allocate-node-cidrs=true",
-			"--cloud-config=/etc/cloud/azure.conf",
+			"--cloud-config=/etc/cloud/" + CloudConfigKey,
 			"--cloud-provider=azure",
 			"--cluster-cidr=" + p.clusterNetwork,
 			"--cluster-name=" + p.ClusterID,
@@ -83,8 +84,10 @@ func buildCCMContainer(p *AzureParams, controllerManagerImage string) func(c *co
 			"--configure-cloud-routes=true",
 			"--leader-elect=true",
 			"--route-reconciliation-period=10s",
+			"--leader-elect-resource-namespace=" + namespace,
 			"--v=4",
-			"--secure-port=10267",
+			// TODO (alberto): adjust this to match our preferred  --leader-elect-* values
+			//"--secure-port=10267",
 		}
 		c.VolumeMounts = podVolumeMounts().ContainerMounts(c.Name)
 	}

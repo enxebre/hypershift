@@ -2085,6 +2085,14 @@ func (r *HostedControlPlaneReconciler) reconcileCloudProviderConfig(ctx context.
 			return fmt.Errorf("failed to get Azure credentials secret: %w", err)
 		}
 
+		// We need different configs for KAS/KCM and Kubelet in Nodes
+		cfg := manifests.AzureProviderConfig(hcp.Namespace)
+		if _, err := createOrUpdate(ctx, r, cfg, func() error {
+			return azure.ReconcileCloudConfig(cfg, hcp, credentialsSecret)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile Azure cloud config: %w", err)
+		}
+
 		withSecrets := manifests.AzureProviderConfigWithCredentials(hcp.Namespace)
 		if _, err := createOrUpdate(ctx, r, withSecrets, func() error {
 			return azure.ReconcileCloudConfigWithCredentials(withSecrets, hcp, credentialsSecret)
@@ -3690,6 +3698,43 @@ func (r *HostedControlPlaneReconciler) reconcileCloudControllerManager(ctx conte
 		}); err != nil {
 			return fmt.Errorf("failed to reconcile %s cloud provider service account: %w", hcp.Spec.Platform.Type, err)
 		}
+
+		role := azure.Role(hcp.Namespace)
+		if _, err := createOrUpdate(ctx, r, role, func() error {
+			role.Rules = []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{"coordination.k8s.io"},
+					Resources: []string{
+						"leases",
+					},
+					Verbs: []string{"*"},
+				},
+				// TODO (alberto): align with https://github.com/openshift/cluster-cloud-controller-manager-operator/blob/release-4.15/manifests/0000_26_cloud-controller-manager-operator_03_rbac_provider.yaml#L107
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile %T %s: %w", role, role.Name, err)
+		}
+
+		roleBinding := azure.RoleBinding(hcp.Namespace)
+		if _, err := createOrUpdate(ctx, r, roleBinding, func() error {
+			roleBinding.RoleRef = rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     role.Name,
+			}
+			roleBinding.Subjects = []rbacv1.Subject{
+				{
+					Kind:      rbacv1.ServiceAccountKind,
+					Namespace: hcp.Namespace,
+					Name:      role.Name,
+				},
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile %T %s: %w", roleBinding, roleBinding.Name, err)
+		}
+
 		p := azure.NewAzureParams(hcp)
 		deployment := azure.CCMDeployment(hcp.Namespace)
 		if _, err := createOrUpdate(ctx, r, deployment, func() error {

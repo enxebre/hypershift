@@ -3,6 +3,7 @@ package azure
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,5 +40,23 @@ func ccmVolumeKubeconfig() *corev1.Volume {
 func ccmCloudConfig() *corev1.Volume {
 	return &corev1.Volume{
 		Name: "cloud-config",
+	}
+}
+
+func Role(ns string) *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "azure-cloud-controller-manager",
+			Namespace: ns,
+		},
+	}
+}
+
+func RoleBinding(ns string) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "azure-cloud-controller-manager",
+			Namespace: ns,
+		},
 	}
 }
