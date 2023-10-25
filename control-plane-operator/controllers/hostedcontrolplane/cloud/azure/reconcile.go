@@ -1,6 +1,8 @@
 package azure
 
 import (
+	"fmt"
+
 	hyperv1 "github.com/openshift/hypershift/api/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
@@ -75,19 +77,21 @@ func buildCCMContainer(p *AzureParams, controllerManagerImage, namespace string)
 		c.ImagePullPolicy = corev1.PullIfNotPresent
 		c.Command = []string{"/bin/azure-cloud-controller-manager"}
 		c.Args = []string{
-			"--allocate-node-cidrs=true",
 			"--cloud-config=/etc/cloud/" + CloudConfigKey,
 			"--cloud-provider=azure",
-			"--cluster-cidr=" + p.clusterNetwork,
-			"--cluster-name=" + p.ClusterID,
 			"--controllers=*,-cloud-node",
-			"--configure-cloud-routes=true",
+			"--configure-cloud-routes=false",
+			"--bind-address=127.0.0.1",
+			"--cluster-name=" + p.ClusterID,
 			"--leader-elect=true",
 			"--route-reconciliation-period=10s",
-			"--leader-elect-resource-namespace=" + namespace,
+			"--kubeconfig=/etc/kubernetes/kubeconfig/kubeconfig",
+			fmt.Sprintf("--leader-elect-lease-duration=%s", config.RecommendedLeaseDuration),
+			fmt.Sprintf("--leader-elect-renew-deadline=%s", config.RecommendedRenewDeadline),
+			fmt.Sprintf("--leader-elect-retry-period=%s", config.RecommendedRetryPeriod),
+			"--leader-elect-resource-namespace=openshift-cloud-controller-manager",
 			"--v=4",
 			// TODO (alberto): adjust this to match our preferred  --leader-elect-* values
-			//"--secure-port=10267",
 		}
 		c.VolumeMounts = podVolumeMounts().ContainerMounts(c.Name)
 	}

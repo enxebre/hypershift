@@ -2207,7 +2207,8 @@ func (r *reconciler) reconcileAzureCloudNodeManager(ctx context.Context, image s
 							Command: []string{
 								"/bin/azure-cloud-node-manager",
 								"--node-name=$(NODE_NAME)",
-								"--wait-routes=true",
+								"--enable-deprecated-beta-topology-labels",
+								"--wait-routes=false",
 							},
 							Env: []corev1.EnvVar{
 								{
