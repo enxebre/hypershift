@@ -15,17 +15,20 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	osinv1 "github.com/openshift/api/osin/v1"
+	kas "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/kas"
+	manifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/support/konnectivityproxy"
+	"github.com/openshift/hypershift/support/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/cache"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/net"
+	clientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/hypershift/support/util"
 )
 
 const (
@@ -135,6 +138,7 @@ func convertProviderConfigToIDPData(
 	idpVolumeMounts *IDPVolumeMountInfo,
 	kclient crclient.Client,
 	namespace string,
+	skipKonnectivityDialer bool,
 ) (*idpData, error) {
 	const missingProviderFmt string = "type %s was specified, but its configuration is missing"
 
@@ -345,7 +349,7 @@ func convertProviderConfigToIDPData(
 			openIDProvider.URLs = configOverride.URLs
 			openIDProvider.Claims = configOverride.Claims
 		} else {
-			urls, err := discoverOpenIDURLs(ctx, kclient, openIDConfig.Issuer, corev1.ServiceAccountRootCAKey, namespace, openIDConfig.CA)
+			urls, err := discoverOpenIDURLs(ctx, kclient, openIDConfig.Issuer, corev1.ServiceAccountRootCAKey, namespace, openIDConfig.CA, skipKonnectivityDialer)
 			if err != nil {
 				return nil, err
 			}
@@ -385,6 +389,7 @@ func convertProviderConfigToIDPData(
 				namespace,
 				openIDConfig.CA,
 				openIDConfig.ClientSecret,
+				skipKonnectivityDialer,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("error attempting password grant flow: %v", err)
@@ -420,9 +425,73 @@ func convertProviderConfigToIDPData(
 	return data, nil
 }
 
+func buildKonnectivityDialer(ctx context.Context, kclient crclient.Client, namespace string) (*konnectivityproxy.ProxyDialer, error) {
+	konnectivityClientSecret := manifests.KonnectivityClientSecret(namespace)
+	if err := kclient.Get(ctx, crclient.ObjectKeyFromObject(konnectivityClientSecret), konnectivityClientSecret); err != nil {
+		return nil, fmt.Errorf("failed to get konnectivity client secret: %w", err)
+	}
+	konnectivityClientCert, exists := konnectivityClientSecret.Data["tls.crt"]
+	if !exists || len(konnectivityClientCert) == 0 {
+		return nil, errors.New("konnectivity client secret has not been populated")
+	}
+
+	konnectivityClientCertKey, exists := konnectivityClientSecret.Data["tls.key"]
+	if !exists || len(konnectivityClientCertKey) == 0 {
+		return nil, errors.New("konnectivity client secret key has not been populated")
+	}
+
+	konnectivityCAConfigMap := manifests.KonnectivityCAConfigMap(namespace)
+	if err := kclient.Get(ctx, crclient.ObjectKeyFromObject(konnectivityCAConfigMap), konnectivityCAConfigMap); err != nil {
+		return nil, fmt.Errorf("failed to get konnectivity CA config map: %w", err)
+	}
+	konnectivityCA, exists := konnectivityCAConfigMap.Data["ca.crt"]
+	if !exists || len(konnectivityCA) == 0 {
+		return nil, errors.New("konnectivity CA config map has not been populated")
+	}
+
+	kubeconfigSecret := manifests.KASServiceKubeconfigSecret(namespace)
+	if err := kclient.Get(ctx, crclient.ObjectKeyFromObject(kubeconfigSecret), kubeconfigSecret); err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig secret: %w", err)
+	}
+	kubeconfigData, exists := kubeconfigSecret.Data["kubeconfig"]
+	if !exists || len(kubeconfigData) == 0 {
+		return nil, fmt.Errorf("kubeconfig secret has not been populated")
+	}
+
+	guestClusterConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigSecret.Data["kubeconfig"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to create REST config from kubeconfig: %w", err)
+	}
+
+	guestClusterClient, err := crclient.New(guestClusterConfig, crclient.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client for guest cluster: %w", err)
+	}
+
+	opts := konnectivityproxy.Options{
+		CABytes:                         []byte(konnectivityCA),
+		ClientCertBytes:                 konnectivityClientCert,
+		ClientKeyBytes:                  konnectivityClientCertKey,
+		KonnectivityHost:                manifests.KonnectivityServerLocalService("").Name,
+		KonnectivityPort:                kas.KonnectivityServerLocalPort,
+		ConnectDirectlyToCloudAPIs:      false,
+		ResolveFromManagementClusterDNS: true,
+		ResolveFromGuestClusterDNS:      true,
+		ResolveBeforeDial:               false,
+		DisableResolver:                 false,
+		Client:                          guestClusterClient,
+		Log:                             ctrl.LoggerFrom(ctx),
+	}
+	konnectivityDialer, err := konnectivityproxy.NewKonnectivityDialer(opts)
+	if err != nil {
+		return nil, err
+	}
+	return &konnectivityDialer, nil
+}
+
 // discoverOpenIDURLs retrieves basic information about an OIDC server with hostname
 // given by the `issuer` argument
-func discoverOpenIDURLs(ctx context.Context, kclient crclient.Client, issuer, key, namespace string, ca configv1.ConfigMapNameReference) (*osinv1.OpenIDURLs, error) {
+func discoverOpenIDURLs(ctx context.Context, kclient crclient.Client, issuer, key, namespace string, ca configv1.ConfigMapNameReference, skipKonnectivityDialer bool) (*osinv1.OpenIDURLs, error) {
 	issuer = strings.TrimRight(issuer, "/") // TODO make impossible via validation and remove
 	wellKnown := issuer + "/.well-known/openid-configuration"
 
@@ -440,7 +509,15 @@ func discoverOpenIDURLs(ctx context.Context, kclient crclient.Client, issuer, ke
 	}
 	req = req.WithContext(reqCtx)
 
-	rt, err := transportForCARef(ctx, kclient, namespace, ca.Name, key)
+	var konnectivityDialer *konnectivityproxy.ProxyDialer
+	if !skipKonnectivityDialer {
+		konnectivityDialer, err = buildKonnectivityDialer(ctx, kclient, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build konnectivity dialer: %w", err)
+		}
+	}
+
+	rt, err := transportForCARef(ctx, kclient, namespace, ca.Name, key, *konnectivityDialer)
 	if err != nil {
 		return nil, err
 	}
@@ -497,6 +574,7 @@ func checkOIDCPasswordGrantFlow(ctx context.Context,
 	namespace string,
 	caRererence configv1.ConfigMapNameReference,
 	clientSecretReference configv1.SecretNameReference,
+	skipKonnectivityDialer bool,
 ) (bool, error) {
 	log := ctrl.LoggerFrom(ctx)
 	secret := &corev1.Secret{
@@ -522,7 +600,15 @@ func checkOIDCPasswordGrantFlow(ctx context.Context,
 		return false, fmt.Errorf("the referenced secret does not contain a value for the 'clientSecret' key")
 	}
 
-	transport, err := transportForCARef(ctx, kclient, namespace, caRererence.Name, corev1.ServiceAccountRootCAKey)
+	var konnectivityDialer *konnectivityproxy.ProxyDialer
+	if !skipKonnectivityDialer {
+		konnectivityDialer, err = buildKonnectivityDialer(ctx, kclient, namespace)
+		if err != nil {
+			return false, fmt.Errorf("failed to build konnectivity dialer: %w", err)
+		}
+	}
+
+	transport, err := transportForCARef(ctx, kclient, namespace, caRererence.Name, corev1.ServiceAccountRootCAKey, *konnectivityDialer)
 	if err != nil {
 		return false, fmt.Errorf("couldn't get a transport for the referenced CA: %v", err)
 	}
@@ -596,11 +682,15 @@ func isValidURL(rawurl string, optional bool) bool {
 	return u.Scheme == "https" && len(u.Host) > 0 && len(u.Fragment) == 0
 }
 
-func transportForCARef(ctx context.Context, kclient crclient.Client, namespace, name, key string) (http.RoundTripper, error) {
+func transportForCARef(ctx context.Context, kclient crclient.Client, namespace, name, key string, dialer konnectivityproxy.ProxyDialer) (http.RoundTripper, error) {
 	// copy default transport
 	transport := net.SetTransportDefaults(&http.Transport{
 		TLSClientConfig: &tls.Config{},
 	})
+
+	if dialer != nil {
+		transport.DialContext = dialer.DialContext
+	}
 
 	if len(name) == 0 {
 		return transport, nil
