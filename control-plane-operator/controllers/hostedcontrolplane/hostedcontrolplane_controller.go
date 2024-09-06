@@ -63,6 +63,7 @@ import (
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/scheduler"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/snapshotcontroller"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/storage"
+	cpov2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2"
 	pkimanifests "github.com/openshift/hypershift/control-plane-pki-operator/manifests"
 	sharedingress "github.com/openshift/hypershift/hypershift-operator/controllers/sharedingress"
 	supportawsutil "github.com/openshift/hypershift/support/awsutil"
@@ -96,6 +97,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
@@ -181,6 +183,7 @@ type HostedControlPlaneReconciler struct {
 	awsSession                              *session.Session
 	reconcileInfrastructureStatus           func(ctx context.Context, hcp *hyperv1.HostedControlPlane) (InfrastructureStatus, error)
 	EnableCVOManagementClusterMetricsAccess bool
+	restConfig                              *rest.Config
 }
 
 func (r *HostedControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, createOrUpdate upsert.CreateOrUpdateFN) error {
@@ -203,7 +206,7 @@ func (r *HostedControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, create
 	r.SetDefaultSecurityContext = !r.ManagementClusterCapabilities.Has(capabilities.CapabilitySecurityContextConstraint)
 
 	r.reconcileInfrastructureStatus = r.defaultReconcileInfrastructureStatus
-
+	r.restConfig = mgr.GetConfig()
 	r.ec2Client, r.awsSession = getEC2Client()
 
 	return nil
@@ -899,10 +902,20 @@ func (r *HostedControlPlaneReconciler) update(ctx context.Context, hostedControl
 
 	userReleaseImageProvider := imageprovider.New(userReleaseImage)
 	releaseImageProvider := imageprovider.New(releaseImage)
-
 	var errs []error
 	if err := r.reconcile(ctx, hostedControlPlane, createOrUpdate, releaseImageProvider, userReleaseImageProvider, infraStatus); err != nil {
 		errs = append(errs, err)
+	}
+
+	// v2 reconciliation:
+	// TODO(alberto):
+	// Move all components to v2 reconciliation assets: Deployments, SVCs, ConfigMaps, etc.
+	// Refactor Infastructure creation.
+	// Refactor secrets creation.
+	// Refactor and redfine status reporting.
+	// Consider moving CPO outside payload.
+	if err := cpov2.Reconcile(ctx, r.restConfig); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	originalHostedControlPlane := hostedControlPlane.DeepCopy()
