@@ -107,6 +107,14 @@ func (cg *ConfigGenerator) CompressedAndEncoded() (*bytes.Buffer, error) {
 // TODO(alberto): hash the struct directly instead of the string representation field by field.
 // This is kept like this for now to contain the scope of the refactor and avoid backward compatibility issues.
 func (cg *ConfigGenerator) Hash() string {
+	if !consolidateUpgrade[forAdditionalTrusBundle] {
+		// Something else is triggering a rollout. Include the additionalTrustBundleName in the new h
+		if hashWithoutTrustedbundle != oldHash {
+			return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig)
+		}
+		return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.globalConfig)
+	}
+
 	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig)
 }
 

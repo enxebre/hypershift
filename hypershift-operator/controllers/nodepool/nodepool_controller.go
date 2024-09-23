@@ -1737,6 +1737,7 @@ func (r *NodePoolReconciler) reconcileMachineDeployment(log logr.Logger,
 		if nodePool.Status.Version != targetVersion {
 			log.Info("Version update complete",
 				"previous", nodePool.Status.Version, "new", targetVersion)
+			nodePool.Annotations[consolidateUpgradeForAdditionalTrusBundle] = "true"
 			nodePool.Status.Version = targetVersion
 		}
 

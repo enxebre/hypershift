@@ -1628,3 +1628,17 @@ spec:
 		})
 	}
 }
+
+func TestHashMatch(t *testing.T) {
+
+	t.Run("Hash with empty and without additionalTrustBundleName", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Hash without additionalTrustBundleName
+		hashwithEmpty := supportutil.HashSimple("1" + "2" + "" + "3")
+		hashWithoutTheField := supportutil.HashSimple("1" + "2" + "3")
+
+		// Hash with hashWithoutTheField
+		g.Expect(hashwithEmpty).To(Equal(hashWithoutTheField))
+	})
+}
