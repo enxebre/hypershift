@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -111,7 +112,39 @@ func (cg *ConfigGenerator) CompressedAndEncoded() (*bytes.Buffer, error) {
 // TODO(alberto): hash the struct directly instead of the string representation field by field.
 // This is kept like this for now to contain the scope of the refactor and avoid backward compatibility issues.
 func (cg *ConfigGenerator) Hash() string {
-	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig)
+	consolidatedAnnotation := "consolidated.hypershift.io"
+	// value is {trustBundle, newfield, ...}
+	// when empty a field is not consolidated.
+	consolidatedFields := &consolidatedFields{}
+	err := json.Unmarshal([]byte(cg.nodePool.Annotations[consolidatedAnnotation]), &consolidatedFields)
+	if err != nil {
+		// handle error
+	}
+
+	// Something else is triggering a rollout. Accept the rollout and include the new consolidatedFields in the new hash to consolidate.
+	if hashWithoutNotConsolidatedFields(consolidatedFields) != currentHash {
+		consolidatedFields = markAsConsolidated(consolidatedFields) // we need to set the value of the struct fields to not empty here.
+		marshalledConsolidatedFields, err := json.Marshal(consolidatedFields)
+		if err != nil {
+			// handle error
+		}
+		cg.nodePool.Annotations[consolidatedAnnotation] = string(marshalledConsolidatedFields)
+		return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + hashConsolidated(consolidatedFields) + cg.globalConfig)
+	} else {
+		// Only different are the fields to be consolidated, don't accept the rollout.
+		return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + hashConsolidated(consolidatedFields) + cg.globalConfig)
+	}
+}
+
+type consolidatedFields struct {
+	TrustBundle string `json:"trustBundle"`
+	NewField    string `json:"newField"`
+}
+
+func markAsConsolidated(consolidatedFields *consolidatedFields) *consolidatedFields {
+	consolidatedFields.TrustBundle = "consolidated"
+	consolidatedFields.NewField = "consolidated"
+	return consolidatedFields
 }
 
 // HashWithOutVersion is like Hash but doesn't compute the release version.
