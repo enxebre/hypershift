@@ -4455,7 +4455,7 @@ string
 </td>
 <td>
 <p>baseDomain is the base domain of the hosted cluster.
-It will be used to confgure ingress in the hosted cluster through the subdomain baseDomainPrefix.baseDomain.
+It will be used to configure ingress in the hosted cluster through the subdomain baseDomainPrefix.baseDomain.
 If baseDomainPrefix is ommitted, the hostedCluster.name will be used as the subdomain.
 Once set, this field is immutable.
 When the value is the empty string &ldquo;&rdquo;, the controller might default to a value depending on the platform.</p>
@@ -4471,7 +4471,7 @@ string
 <td>
 <em>(Optional)</em>
 <p>baseDomainPrefix is the base domain prefix for the hosted cluster ingress.
-It will be used to confgure ingress in the hosted cluster through the subdomain baseDomainPrefix.baseDomain.
+It will be used to configure ingress in the hosted cluster through the subdomain baseDomainPrefix.baseDomain.
 If baseDomainPrefix is ommitted, the hostedCluster.name will be used as the subdomain.
 Set baseDomainPrefix to an empty string &ldquo;&rdquo;, if you don&rsquo;t want a prefix at all (not even hostedCluster.name) to be prepended to baseDomain.
 This field is immutable.</p>
