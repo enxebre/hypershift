@@ -1098,6 +1098,86 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Part two: reconcile the state of the world
+	// if hcluster.Spec.AutoNode != nil && hcluster.Spec.AutoNode.Provisioner.Name == hyperv1.ProvisionerKarpeneter {
+	taintConfigName := "set-karpenter-taint"
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      taintConfigName,
+			Namespace: hcluster.Namespace,
+		},
+	}
+
+	kubeletConfig := `apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: set-karpenter-taint
+spec:
+  kubeletConfig:
+    registerWithTaints:
+      - key: "karpenter.sh/unregistered"
+        value: "true"
+        effect: "NoExecute"`
+
+	_, err = createOrUpdate(ctx, r.Client, configMap, func() error {
+		configMap.Data = map[string]string{
+			"config": kubeletConfig,
+		}
+		return nil
+	})
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to create configmap: %w", err)
+	}
+
+	nodePool := &hyperv1.NodePool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "karpenter",
+			Namespace: hcluster.Namespace,
+		},
+	}
+	_, err = createOrUpdate(ctx, r.Client, nodePool, func() error {
+		nodePool.Spec = hyperv1.NodePoolSpec{
+			ClusterName: hcluster.Name,
+			Replicas:    ptr.To(int32(0)),
+			Release:     hcluster.Spec.Release,
+			Config: []corev1.LocalObjectReference{
+				{
+					Name: taintConfigName,
+				},
+			},
+			Management: hyperv1.NodePoolManagement{
+				UpgradeType: hyperv1.UpgradeTypeReplace,
+				Replace: &hyperv1.ReplaceUpgrade{
+					Strategy: hyperv1.UpgradeStrategyRollingUpdate,
+					RollingUpdate: &hyperv1.RollingUpdate{
+						MaxUnavailable: ptr.To(intstr.FromInt(0)),
+						MaxSurge:       ptr.To(intstr.FromInt(1)),
+					},
+				},
+				AutoRepair: false,
+			},
+			Platform: hyperv1.NodePoolPlatform{
+				Type: hyperv1.AWSPlatform,
+				AWS: &hyperv1.AWSNodePoolPlatform{
+					InstanceType: "m5.large",
+					// InstanceProfile: "",
+					Subnet: hyperv1.AWSResourceReference{
+						ID: ptr.To("subnet-none"),
+					},
+					// RootVolume:      &hyperv1.Volume{},
+					// ResourceTags:    []hyperv1.AWSResourceTag{},
+					// Placement:       &hyperv1.PlacementOptions{},
+				},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to create configmap: %w", err)
+	}
+
+	// } else {
+	// 	// delete
+	// }
 
 	// Ensure the cluster has a finalizer for cleanup and update right away.
 	if !controllerutil.ContainsFinalizer(hcluster, HostedClusterFinalizer) {
@@ -1945,6 +2025,7 @@ func reconcileHostedControlPlane(hcp *hyperv1.HostedControlPlane, hcluster *hype
 	hcp.Spec.PausedUntil = hcluster.Spec.PausedUntil
 	hcp.Spec.OLMCatalogPlacement = hcluster.Spec.OLMCatalogPlacement
 	hcp.Spec.Autoscaling = hcluster.Spec.Autoscaling
+	hcp.Spec.AutoNode = hcluster.Spec.AutoNode
 	hcp.Spec.NodeSelector = hcluster.Spec.NodeSelector
 	hcp.Spec.Tolerations = hcluster.Spec.Tolerations
 	hcp.Spec.Labels = hcluster.Spec.Labels

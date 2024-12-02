@@ -209,6 +209,25 @@ var (
 }`,
 	}
 
+	karpenterPolicy = policyBinding{
+		name:            "karpenter",
+		serviceAccounts: []string{"system:serviceaccount:kube-system:karpenter"},
+		policy: `{
+			"Version": "2012-10-17",
+			"Statement": [
+			  {
+				"Action": [
+				  "*"
+				],
+				"Resource": [
+				  "*"
+				],
+				"Effect": "Allow"
+			  }
+			]
+		  }`,
+	}
+
 	nodePoolPolicy = policyBinding{
 		name:            "node-pool",
 		serviceAccounts: []string{"system:serviceaccount:kube-system:capa-controller-manager"},
@@ -628,6 +647,12 @@ func (o *CreateIAMOptions) CreateOIDCResources(iamClient iamiface.IAMAPI, logger
 		&output.Roles.ControlPlaneOperatorARN: controlPlaneOperatorPolicy(o.LocalZoneID, sharedVPC),
 		&output.Roles.NetworkARN:              cloudNetworkConfigControllerPolicy,
 	}
+
+	if o.CreateKarpenterRoleARN {
+		bindings[&output.KarpenterRoleARN] = karpenterPolicy
+
+	}
+
 	if len(o.KMSKeyARN) > 0 {
 		bindings[&output.KMSProviderRoleARN] = kmsProviderPolicy(o.KMSKeyARN)
 	}

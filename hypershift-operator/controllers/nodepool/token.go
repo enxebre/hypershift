@@ -60,6 +60,7 @@ type userData struct {
 	caCert                 []byte
 	ignitionServerEndpoint string
 	proxy                  *configv1.Proxy
+	ami                    string
 }
 
 // NewToken is the contract to create a new Token struct.
@@ -124,10 +125,16 @@ func NewToken(ctx context.Context, configGenerator *ConfigGenerator, cpoCapabili
 	proxy := globalconfig.ProxyConfig()
 	globalconfig.ReconcileProxyConfigWithStatusFromHostedCluster(proxy, configGenerator.hostedCluster)
 
+	ami, err := defaultNodePoolAMI(configGenerator.hostedCluster.Spec.Platform.AWS.Region, configGenerator.nodePool.Spec.Arch, configGenerator.releaseImage)
+	if err != nil {
+		return nil, err
+	}
+
 	token.userData = &userData{
 		ignitionServerEndpoint: ignEndpoint,
 		caCert:                 caCert,
 		proxy:                  proxy,
+		ami:                    ami,
 	}
 
 	return token, nil
@@ -335,6 +342,11 @@ func (t *Token) reconcileUserDataSecret(userDataSecret *corev1.Secret, token str
 		userDataSecret.Annotations = make(map[string]string)
 	}
 	userDataSecret.Annotations[nodePoolAnnotation] = client.ObjectKeyFromObject(t.nodePool).String()
+	if userDataSecret.Labels == nil {
+		userDataSecret.Labels = make(map[string]string)
+	}
+	userDataSecret.Labels[hyperv1.NodePoolLabel] = t.nodePool.GetName()
+	userDataSecret.Labels["hypershift.openshift.io/ami"] = t.userData.ami
 
 	encodedCACert := base64.StdEncoding.EncodeToString(t.userData.caCert)
 	encodedToken := base64.StdEncoding.EncodeToString([]byte(token))
