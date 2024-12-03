@@ -347,11 +347,28 @@ func (r *NodePoolReconciler) updatingConfigCondition(ctx context.Context, nodePo
 	targetConfigHash := token.HashWithoutVersion()
 	isUpdatingConfig := isUpdatingConfig(nodePool, targetConfigHash)
 	if isUpdatingConfig {
+		reason := hyperv1.AsExpectedReason
+		message := fmt.Sprintf("Updating config in progress. Target config: %s", targetConfigHash)
+		status := corev1.ConditionTrue
+
+		// If inPlance then Get MachineSet and:
+		if _, ok := machineSet.Annotations[nodePoolAnnotationUpgradeInProgressTrue]; ok {
+			status = corev1.ConditionTrue
+			reason = hyperv1.AsExpectedReason
+			message = machineSet.Annotations[nodePoolAnnotationUpgradeInProgressTrue]
+		}
+
+		if _, ok := machineSet.Annotations[nodePoolAnnotationUpgradeInProgressFalse]; ok {
+			status = corev1.ConditionFalse
+			reason = hyperv1.NodePoolInplaceUpgradeFailedReason
+			message = machineSet.Annotations[nodePoolAnnotationUpgradeInProgressFalse]
+		}
+
 		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
 			Type:               hyperv1.NodePoolUpdatingConfigConditionType,
-			Status:             corev1.ConditionTrue,
-			Reason:             hyperv1.AsExpectedReason,
-			Message:            fmt.Sprintf("Updating config in progress. Target config: %s", targetConfigHash),
+			Status:             status,
+			Reason:             reason,
+			Message:            message,
 			ObservedGeneration: nodePool.Generation,
 		})
 		log.Info("NodePool config is updating",
@@ -365,6 +382,7 @@ func (r *NodePoolReconciler) updatingConfigCondition(ctx context.Context, nodePo
 			ObservedGeneration: nodePool.Generation,
 		})
 	}
+
 	return nil, nil
 }
 
