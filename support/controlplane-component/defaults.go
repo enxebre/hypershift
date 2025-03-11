@@ -7,7 +7,6 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/kas"
 	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/util"
 
@@ -64,7 +63,7 @@ func (c *controlPlaneWorkload[T]) defaultOptions(cpContext ControlPlaneContext, 
 	if c.availabilityProberOpts != nil {
 		availabilityProberImage := cpContext.ReleaseImageProvider.GetImage(util.AvailabilityProberImageName)
 		util.AvailabilityProber(
-			kas.InClusterKASReadyURL(cpContext.HCP.Spec.Platform.Type), availabilityProberImage,
+			InClusterKASReadyURL(cpContext.HCP.Spec.Platform.Type), availabilityProberImage,
 			&podTemplateSpec.Spec,
 			util.WithOptions(c.availabilityProberOpts))
 	}

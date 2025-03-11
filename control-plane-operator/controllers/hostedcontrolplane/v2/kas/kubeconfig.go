@@ -193,6 +193,10 @@ func InClusterKASURL(platformType hyperv1.PlatformType) string {
 	return fmt.Sprintf("https://%s:%d", manifests.KubeAPIServerServiceName, config.KASSVCPort)
 }
 
+func InClusterKASReadyURL(platformType hyperv1.PlatformType) string {
+	return InClusterKASURL(platformType) + "/readyz"
+}
+
 func externalURL(infraStatus infra.InfrastructureStatus) string {
 	return fmt.Sprintf("https://%s:%d", pki.AddBracketsIfIPv6(infraStatus.APIHost), infraStatus.APIPort)
 }

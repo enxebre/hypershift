@@ -33,7 +33,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/api/util/configrefs"
 	"github.com/openshift/hypershift/cmd/util"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/machineapprover"
 	cpomanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/control-plane-pki-operator/certificates"
 	ignitionserverreconciliation "github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/ignitionserver"
@@ -1203,7 +1202,6 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	}
 	_, ignitionServerHasHealthzHandler := controlPlaneOperatorImageLabels[ignitionServerHealthzHandlerLabel]
 	_, controlplaneOperatorManagesIgnitionServer := controlPlaneOperatorImageLabels[controlplaneOperatorManagesIgnitionServerLabel]
-	_, controlPlaneOperatorManagesMachineApprover := controlPlaneOperatorImageLabels[controlPlaneOperatorManagesMachineApprover]
 	_, controlPlaneOperatorAppliesManagementKASNetworkPolicyLabel := controlPlaneOperatorImageLabels[controlPlaneOperatorAppliesManagementKASNetworkPolicyLabel]
 	_, controlPlanePKIOperatorSignsCSRs := controlPlaneOperatorImageLabels[controlPlanePKIOperatorSignsCSRsLabel]
 	_, useRestrictedPSA := controlPlaneOperatorImageLabels[useRestrictedPodSecurityLabel]
@@ -1735,13 +1733,6 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		// Reconcile the CAPI provider components
 		if err = r.reconcileCAPIProvider(ctx, createOrUpdate, hcluster, hcp, capiProviderDeploymentSpec, p); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to reconcile capi provider: %w", err)
-		}
-	}
-
-	if !controlPlaneOperatorManagesMachineApprover {
-		// Reconcile the machine approver.
-		if err = r.reconcileMachineApprover(ctx, createOrUpdate, hcluster, hcp, utilitiesImage, pullSecretBytes, releaseImageVersion, releaseProvider); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to reconcile machine approver: %w", err)
 		}
 	}
 
@@ -4207,19 +4198,6 @@ func (r *HostedClusterReconciler) reconcileClusterPrometheusRBAC(ctx context.Con
 	}
 
 	return nil
-}
-
-func (r *HostedClusterReconciler) reconcileMachineApprover(ctx context.Context, createOrUpdate upsert.CreateOrUpdateFN, hcluster *hyperv1.HostedCluster, hcp *hyperv1.HostedControlPlane, utilitiesImage string, pullSecretBytes []byte, releaseVersion semver.Version, releaseProvider releaseinfo.ProviderWithOpenShiftImageRegistryOverrides) error {
-	machineApproverImage, err := hyperutil.GetPayloadImage(ctx, releaseProvider, hcluster, ImageStreamClusterMachineApproverImage, pullSecretBytes)
-	if err != nil {
-		return fmt.Errorf("failed to get image for machine approver: %w", err)
-	}
-	// TODO: can remove this override when all IBM production clusters upgraded to a version that uses the release image
-	if imageVal, ok := hcluster.Annotations[hyperv1.MachineApproverImage]; ok {
-		machineApproverImage = imageVal
-	}
-
-	return machineapprover.ReconcileMachineApprover(ctx, r.Client, hcp, machineApproverImage, utilitiesImage, createOrUpdate, r.SetDefaultSecurityContext, config.OwnerRefFrom(hcp))
 }
 
 func (r *HostedClusterReconciler) validateConfigAndClusterCapabilities(ctx context.Context, hc *hyperv1.HostedCluster) error {

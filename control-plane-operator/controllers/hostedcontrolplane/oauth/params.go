@@ -14,10 +14,7 @@ import (
 	osinv1 "github.com/openshift/api/osin/v1"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -114,63 +111,6 @@ func NewOAuthServerParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider 
 	if hcp.Annotations[hyperv1.APICriticalPriorityClass] != "" {
 		p.Scheduling.PriorityClass = hcp.Annotations[hyperv1.APICriticalPriorityClass]
 	}
-	p.Resources = map[string]corev1.ResourceRequirements{
-		oauthContainerMain().Name: {
-			Requests: corev1.ResourceList{
-				corev1.ResourceMemory: resource.MustParse("40Mi"),
-				corev1.ResourceCPU:    resource.MustParse("25m"),
-			},
-		},
-		oauthContainerHTTPProxy().Name: {
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),
-				corev1.ResourceMemory: resource.MustParse("10Mi"),
-			},
-		},
-		oauthContainerSocks5Proxy().Name: {
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),
-				corev1.ResourceMemory: resource.MustParse("10Mi"),
-			},
-		},
-	}
-	p.LivenessProbes = config.LivenessProbes{
-		oauthContainerMain().Name: {
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Scheme: corev1.URISchemeHTTPS,
-					Port:   intstr.FromInt(OAuthServerPort),
-					Path:   "healthz",
-				},
-			},
-			InitialDelaySeconds: 120,
-			TimeoutSeconds:      10,
-			PeriodSeconds:       60,
-			FailureThreshold:    3,
-			SuccessThreshold:    1,
-		},
-	}
-	p.ReadinessProbes = config.ReadinessProbes{
-		oauthContainerMain().Name: {
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Scheme: corev1.URISchemeHTTPS,
-					Port:   intstr.FromInt(OAuthServerPort),
-					Path:   "healthz",
-				},
-			},
-			TimeoutSeconds:   5,
-			PeriodSeconds:    10,
-			FailureThreshold: 3,
-			SuccessThreshold: 1,
-		},
-	}
-	replicas := ptr.To(2)
-	if hcp.Spec.ControllerAvailabilityPolicy == hyperv1.SingleReplica {
-		replicas = ptr.To(1)
-	}
-	p.DeploymentConfig.SetRequestServingDefaults(hcp, oauthServerLabels, replicas)
-	p.DeploymentConfig.SetRestartAnnotation(hcp.ObjectMeta)
 
 	p.OauthConfigOverrides = map[string]*ConfigOverride{}
 	for annotationKey, annotationValue := range hcp.Annotations {
@@ -187,12 +127,6 @@ func NewOAuthServerParams(hcp *hyperv1.HostedControlPlane, releaseImageProvider 
 		} else if annotationKey == hyperv1.OauthLoginURLOverrideAnnotation {
 			p.LoginURLOverride = annotationValue
 		}
-	}
-
-	p.SetDefaultSecurityContext = setDefaultSecurityContext
-
-	if hcp.Spec.Platform.Type == hyperv1.IBMCloudPlatform {
-		p.OAuthNoProxy = append(p.OAuthNoProxy, "iam.cloud.ibm.com", "iam.test.cloud.ibm.com")
 	}
 
 	return p

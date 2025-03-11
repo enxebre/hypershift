@@ -1,7 +1,11 @@
 package controlplanecomponent
 
 import (
+	"fmt"
+
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/support/config"
 
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -40,4 +44,18 @@ func EnableForPlatform(platform hyperv1.PlatformType) option {
 	return WithPredicate(func(cpContext WorkloadContext) bool {
 		return cpContext.HCP.Spec.Platform.Type == platform
 	})
+}
+
+// TODO(alberto): This is a copy of consumed functions that lived within the old CPO packages.
+// Some are also declared within the v2/kas package. Importing those here causes a circular dependency.
+// We should find a way to refactor those.
+func InClusterKASURL(platformType hyperv1.PlatformType) string {
+	if platformType == hyperv1.IBMCloudPlatform {
+		return fmt.Sprintf("https://%s:%d", manifests.KubeAPIServerServiceName, config.KASSVCIBMCloudPort)
+	}
+	return fmt.Sprintf("https://%s:%d", manifests.KubeAPIServerServiceName, config.KASSVCPort)
+}
+
+func InClusterKASReadyURL(platformType hyperv1.PlatformType) string {
+	return InClusterKASURL(platformType) + "/readyz"
 }
