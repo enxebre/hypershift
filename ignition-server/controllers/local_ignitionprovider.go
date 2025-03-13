@@ -19,7 +19,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/common"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/api"
 	"github.com/openshift/hypershift/support/certs"
 	"github.com/openshift/hypershift/support/releaseinfo"
@@ -304,11 +303,11 @@ func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, cu
 		cloudConfigMap := &corev1.ConfigMap{}
 		switch p.CloudProvider {
 		case hyperv1.AzurePlatform:
-			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: manifests.AzureProviderConfig("").Name}, cloudConfigMap); err != nil {
+			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: AzureProviderConfig("").Name}, cloudConfigMap); err != nil {
 				return nil, fmt.Errorf("failed to get cloud provider configmap: %w", err)
 			}
 		case hyperv1.OpenStackPlatform:
-			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: manifests.OpenStackProviderConfig("").Name}, cloudConfigMap); err != nil {
+			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: OpenStackProviderConfig("").Name}, cloudConfigMap); err != nil {
 				return nil, fmt.Errorf("failed to get cloud provider configmap: %w", err)
 			}
 		}
@@ -893,4 +892,25 @@ func (p *LocalIgnitionProvider) extractMCOBinaries(ctx context.Context, cpoOSRel
 
 	log.Info("downloaded binaries", "time", time.Since(start).Round(time.Second).String())
 	return nil
+}
+
+// AzureProviderConfig is a configMap for azure config.
+// TODO (alberto): can we drop this completely?
+// It has some consumers atm: it's reconciled into guest cluster, ignition local provider. Review them and drop it.
+func AzureProviderConfig(ns string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "azure-cloud-config",
+			Namespace: ns,
+		},
+	}
+}
+
+func OpenStackProviderConfig(ns string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "openstack-cloud-config",
+			Namespace: ns,
+		},
+	}
 }

@@ -6,7 +6,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/aws"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/azure"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/globalconfig"
 	"github.com/openshift/hypershift/support/util"
@@ -72,7 +71,7 @@ func NewConfigParams(hcp *hyperv1.HostedControlPlane) KubeAPIServerConfigParams 
 		FeatureGates:                 config.FeatureGates(hcp.Spec.Configuration.GetFeatureGateSelection()),
 		NodePortRange:                serviceNodePortRange(hcp.Spec.Configuration),
 		ConsolePublicURL:             fmt.Sprintf("https://console-openshift-console.%s", dns.Spec.BaseDomain),
-		DisableProfiling:             util.StringListContains(hcp.Annotations[hyperv1.DisableProfilingAnnotation], manifests.KASDeployment("").Name),
+		DisableProfiling:             util.StringListContains(hcp.Annotations[hyperv1.DisableProfilingAnnotation], KASDeployment("").Name),
 	}
 
 	switch hcp.Spec.Platform.Type {

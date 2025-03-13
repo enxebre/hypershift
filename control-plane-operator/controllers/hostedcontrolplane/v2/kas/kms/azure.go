@@ -6,7 +6,6 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/azure"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/secretproviderclass"
@@ -219,12 +218,21 @@ func kasVolumeAzureKMSCredentials() *corev1.Volume {
 
 func buildVolumeAzureKMSCredentials(v *corev1.Volume) {
 	v.Secret = &corev1.SecretVolumeSource{
-		SecretName: manifests.AzureProviderConfigWithCredentials("").Name,
+		SecretName: AzureProviderConfigWithCredentials("").Name,
 		Items: []corev1.KeyToPath{
 			{
 				Key:  azure.CloudConfigKey,
 				Path: azureKMSCredsFileKey,
 			},
+		},
+	}
+}
+
+func AzureProviderConfigWithCredentials(ns string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "azure-cloud-config",
+			Namespace: ns,
 		},
 	}
 }

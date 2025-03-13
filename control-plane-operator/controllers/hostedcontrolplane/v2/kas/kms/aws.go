@@ -7,8 +7,6 @@ import (
 	"time"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/aws"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/util"
 
@@ -148,7 +146,7 @@ func (p *awsKMSProvider) GenerateKMSPodConfig() (*KMSPodConfig, error) {
 	}
 
 	podConfig.Volumes = append(podConfig.Volumes,
-		util.BuildVolume(kasVolumeAWSKMSCredentials(), buildVolumeAWSKMSCredentials(aws.AWSKMSCredsSecret("").Name)),
+		util.BuildVolume(kasVolumeAWSKMSCredentials(), buildVolumeAWSKMSCredentials(AWSKMSCredsSecret("").Name)),
 		util.BuildVolume(kasVolumeKMSSocket(), buildVolumeKMSSocket),
 		util.BuildVolume(kasVolumeAWSKMSCloudProviderToken(), buildKASVolumeAWSKMSCloudProviderToken),
 	)
@@ -246,6 +244,15 @@ func buildVolumeAWSKMSCredentials(secretName string) func(*corev1.Volume) {
 	}
 }
 
+func KASContainerAWSKMSProviderServiceAccount() *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kms-provider",
+			Namespace: "kube-system",
+		},
+	}
+}
+
 func buildKASContainerAWSKMSTokenMinter(image string) func(*corev1.Container) {
 	return func(c *corev1.Container) {
 		c.Image = image
@@ -253,8 +260,8 @@ func buildKASContainerAWSKMSTokenMinter(image string) func(*corev1.Container) {
 		c.Command = []string{"/usr/bin/control-plane-operator", "token-minter"}
 		c.Args = []string{
 			"--token-audience=openshift",
-			fmt.Sprintf("--service-account-namespace=%s", manifests.KASContainerAWSKMSProviderServiceAccount().Namespace),
-			fmt.Sprintf("--service-account-name=%s", manifests.KASContainerAWSKMSProviderServiceAccount().Name),
+			fmt.Sprintf("--service-account-namespace=%s", KASContainerAWSKMSProviderServiceAccount().Namespace),
+			fmt.Sprintf("--service-account-name=%s", KASContainerAWSKMSProviderServiceAccount().Name),
 			fmt.Sprintf("--token-file=%s", path.Join(awsKMSVolumeMounts.Path(c.Name, kasVolumeAWSKMSCloudProviderToken().Name), "token")),
 			fmt.Sprintf("--kubeconfig=%s", path.Join(awsKMSVolumeMounts.Path(c.Name, kasVolumeLocalhostKubeconfig), util.KubeconfigKey)),
 		}
@@ -274,4 +281,13 @@ func kasVolumeAWSKMSCloudProviderToken() *corev1.Volume {
 
 func buildKASVolumeAWSKMSCloudProviderToken(v *corev1.Volume) {
 	v.EmptyDir = &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory}
+}
+
+func AWSKMSCredsSecret(controlPlaneNamespace string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: controlPlaneNamespace,
+			Name:      "kms-creds",
+		},
+	}
 }

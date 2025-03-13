@@ -1,12 +1,12 @@
 package openstack
 
 import (
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/util"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -56,7 +56,7 @@ func buildTrustedCAVolume() corev1.Volume {
 		Name: trustedCAVolumeName,
 	}
 	v.ConfigMap = &corev1.ConfigMapVolumeSource{
-		LocalObjectReference: corev1.LocalObjectReference{Name: manifests.OpenStackTrustedCA("").Name},
+		LocalObjectReference: corev1.LocalObjectReference{Name: OpenStackTrustedCA("").Name},
 		Items: []corev1.KeyToPath{
 			{
 				Key:  CABundleKey,
@@ -74,4 +74,13 @@ func GetCACertFromCredentialsSecret(secret *corev1.Secret) []byte {
 		return nil
 	}
 	return caCert
+}
+
+func OpenStackTrustedCA(ns string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "openstack-trusted-ca",
+			Namespace: ns,
+		},
+	}
 }

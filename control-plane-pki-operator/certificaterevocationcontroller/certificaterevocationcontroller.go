@@ -17,7 +17,7 @@ import (
 	certificatesv1alpha1applyconfigurations "github.com/openshift/hypershift/client/applyconfiguration/certificates/v1alpha1"
 	hypershiftclient "github.com/openshift/hypershift/client/clientset/clientset"
 	hypershiftinformers "github.com/openshift/hypershift/client/informers/externalversions"
-	hcpmanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	kas "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	"github.com/openshift/hypershift/control-plane-pki-operator/certificates"
 	"github.com/openshift/hypershift/control-plane-pki-operator/manifests"
 
@@ -580,7 +580,7 @@ func (c *CertificateRevocationController) ensureNewSignerCertificatePropagated(c
 	// if the updated trust bundle has propagated as far as we can tell, let's go ahead and ask
 	// KAS to detect when it trusts the new signer
 	if !c.skipKASConnections {
-		kubeconfig := hcpmanifests.KASServiceKubeconfigSecret(namespace)
+		kubeconfig := kas.KASServiceKubeconfigSecret(namespace)
 		kubeconfigSecret, err := c.getSecret(kubeconfig.Namespace, kubeconfig.Name)
 		if err != nil {
 			return true, nil, false, fmt.Errorf("couldn't fetch guest cluster service network kubeconfig: %w", err)
@@ -852,7 +852,7 @@ func (c *CertificateRevocationController) ensureOldSignerCertificateRevoked(ctx 
 	// if the updated trust bundle has propagated as far as we can tell, let's go ahead and ask
 	// KAS to ensure it no longer trusts the old signer
 	if !c.skipKASConnections {
-		kubeconfig := hcpmanifests.KASServiceKubeconfigSecret(namespace)
+		kubeconfig := kas.KASServiceKubeconfigSecret(namespace)
 		kubeconfigSecret, err := c.getSecret(kubeconfig.Namespace, kubeconfig.Name)
 		if err != nil {
 			return true, nil, false, fmt.Errorf("couldn't fetch guest cluster service network kubeconfig: %w", err)

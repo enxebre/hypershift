@@ -262,9 +262,18 @@ func applyAWSPodIdentityWebhookContainer(podSpec *corev1.PodSpec, hcp *hyperv1.H
 		corev1.Volume{
 			Name: awsPodIdentityWebhookKubeconfigVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: manifests.AWSPodIdentityWebhookKubeconfig("").Name},
+				Secret: &corev1.SecretVolumeSource{SecretName: AWSPodIdentityWebhookKubeconfig("").Name},
 			}},
 	)
+}
+
+func AWSPodIdentityWebhookKubeconfig(ns string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-pod-identity-webhook-kubeconfig",
+			Namespace: ns,
+		},
+	}
 }
 
 func buildKASAuditWebhookConfigFileVolume(auditWebhookRef *corev1.LocalObjectReference) corev1.Volume {

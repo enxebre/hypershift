@@ -357,3 +357,12 @@ func NetworkNodeIdentityControllerServingCert(ns string) *corev1.Secret {
 func OVNControlPlaneMetricsServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "ovn-control-plane-metrics-cert")
 }
+
+func ImageRegistryOperatorServingCert(ns string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-image-registry-operator",
+			Namespace: ns,
+		},
+	}
+}

@@ -5,15 +5,14 @@ import (
 	"strings"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/proxy"
 	"github.com/openshift/hypershift/support/util"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -80,7 +79,7 @@ func adaptDeployment(cpContext component.WorkloadContext, deployment *appsv1.Dep
 }
 
 func getServiceServingCA(cpContext component.WorkloadContext) (*corev1.ConfigMap, error) {
-	serviceServingCA := manifests.ServiceServingCA(cpContext.HCP.Namespace)
+	serviceServingCA := ServiceServingCA(cpContext.HCP.Namespace)
 	if err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(serviceServingCA), serviceServingCA); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get service serving CA")
@@ -88,4 +87,13 @@ func getServiceServingCA(cpContext component.WorkloadContext) (*corev1.ConfigMap
 		return nil, nil
 	}
 	return serviceServingCA, nil
+}
+
+func ServiceServingCA(ns string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service-serving-ca",
+			Namespace: ns,
+		},
+	}
 }

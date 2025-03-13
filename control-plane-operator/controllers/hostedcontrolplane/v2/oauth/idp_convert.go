@@ -15,7 +15,7 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	manifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
-	kasv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
+	kas "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	"github.com/openshift/hypershift/support/konnectivityproxy"
 	supportproxy "github.com/openshift/hypershift/support/proxy"
 	"github.com/openshift/hypershift/support/util"
@@ -463,7 +463,7 @@ func buildKonnectivityDialer(ctx context.Context, kclient crclient.Reader, names
 		return nil, errors.New("konnectivity CA config map has not been populated")
 	}
 
-	kubeconfigSecret := manifests.KASServiceKubeconfigSecret(namespace)
+	kubeconfigSecret := kas.KASServiceKubeconfigSecret(namespace)
 	if err := kclient.Get(ctx, crclient.ObjectKeyFromObject(kubeconfigSecret), kubeconfigSecret); err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig secret: %w", err)
 	}
@@ -487,7 +487,7 @@ func buildKonnectivityDialer(ctx context.Context, kclient crclient.Reader, names
 		ClientCertBytes:                 konnectivityClientCert,
 		ClientKeyBytes:                  konnectivityClientCertKey,
 		KonnectivityHost:                manifests.KonnectivityServerLocalService("").Name,
-		KonnectivityPort:                kasv2.KonnectivityServerLocalPort,
+		KonnectivityPort:                kas.KonnectivityServerLocalPort,
 		ConnectDirectlyToCloudAPIs:      false,
 		ResolveFromManagementClusterDNS: true,
 		ResolveFromGuestClusterDNS:      true,

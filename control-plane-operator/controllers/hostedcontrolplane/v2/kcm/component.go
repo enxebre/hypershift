@@ -34,7 +34,7 @@ func NewComponent() component.ControlPlaneComponent {
 			"servicemonitor.yaml",
 			component.WithAdaptFunction(adaptServiceMonitor),
 		).
-		RolloutOnConfigMapChange("kcm-config", manifests.RootCAConfigMap("").Name, manifests.ServiceServingCA("").Name).
+		RolloutOnConfigMapChange("kcm-config", manifests.RootCAConfigMap("").Name, ServiceServingCA("").Name).
 		InjectAvailabilityProberContainer(util.AvailabilityProberOpts{}).
 		Build()
 }

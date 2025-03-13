@@ -33,7 +33,6 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/api/util/configrefs"
 	"github.com/openshift/hypershift/cmd/util"
-	cpomanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/control-plane-pki-operator/certificates"
 	ignitionserverreconciliation "github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/ignitionserver"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform"
@@ -64,6 +63,7 @@ import (
 	"github.com/openshift/hypershift/support/supportedversion"
 	"github.com/openshift/hypershift/support/upsert"
 	hyperutil "github.com/openshift/hypershift/support/util"
+	secretsstorev1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -1823,7 +1823,7 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
 		}
 	case hyperv1.AzurePlatform:
-		cpoSecretProviderClass := cpomanifests.ManagedAzureSecretProviderClass(config.ManagedAzureCPOSecretProviderClassName, hcp.Namespace)
+		cpoSecretProviderClass := ManagedAzureSecretProviderClass(config.ManagedAzureCPOSecretProviderClassName, hcp.Namespace)
 		if _, err = createOrUpdate(ctx, r, cpoSecretProviderClass, func() error {
 			// TODO - MIv3 - this release version check can be removed once 4.18 and 4.19 both support MIv3
 			hcVersion := releaseImageVersion
@@ -1846,6 +1846,15 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		result.RequeueAfter = *requeueAfter
 	}
 	return result, nil
+}
+
+func ManagedAzureSecretProviderClass(name, namespace string) *secretsstorev1.SecretProviderClass {
+	return &secretsstorev1.SecretProviderClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
 }
 
 // annotationsForCertRenewal returns a set of annotations to set based on the current state of the KAS
@@ -2457,7 +2466,7 @@ func (r *HostedClusterReconciler) reconcileControlPlaneOperator(ctx context.Cont
 
 func (r *HostedClusterReconciler) reconcileControlPlanePKIOperatorRBAC(ctx context.Context, createOrUpdate upsert.CreateOrUpdateFN, hcluster *hyperv1.HostedCluster) error {
 	// We don't create this ServiceAccount, the CPO does, but we can reference it in RBAC before it's created as the system is eventually consistent
-	serviceAccount := cpomanifests.PKIOperatorServiceAccount(manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name))
+	serviceAccount := controlplanepkioperatormanifests.PKIOperatorServiceAccount(manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name))
 
 	// Reconcile controlplane PKI operator CSR approver cluster role
 	controlPlanePKIOperatorCSRApproverClusterRole := controlplanepkioperatormanifests.CSRApproverClusterRole(hcluster)

@@ -12,11 +12,9 @@ import (
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/azure"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cloud/openstack"
-	kubevirtcsi "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/csi/kubevirt"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cvo"
 	cpomanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
-	cpoauth "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/oauth"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/ocm"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cvo"
+	cpoauth "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/oauth"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/api"
 	alerts "github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/alerts"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/cco"
@@ -26,6 +24,7 @@ import (
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/kas"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/konnectivity"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/kubeadminpassword"
+	kubevirtcsi "github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/kubevirt"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/manifests"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/monitoring"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/namespaces"
@@ -259,6 +258,10 @@ func Setup(ctx context.Context, opts *operator.HostedClusterConfigOperatorConfig
 	return nil
 }
 
+const (
+	ocmConfigKey = "config.yaml"
+)
+
 func (r *reconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("Reconciling")
@@ -386,7 +389,7 @@ func (r *reconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result
 		}
 		if registryConfig.Spec.ManagementState == operatorv1.Removed && r.platformType != hyperv1.IBMCloudPlatform {
 			log.Info("imageregistry operator managementstate is removed, disabling openshift-controller-manager controllers and cleaning up resources")
-			ocmConfigMap := cpomanifests.OpenShiftControllerManagerConfig(r.hcpNamespace)
+			ocmConfigMap := manifests.OpenShiftControllerManagerConfig(r.hcpNamespace)
 			if _, err := r.CreateOrUpdate(ctx, r.cpClient, ocmConfigMap, func() error {
 				if ocmConfigMap.Data == nil {
 					// CPO has not created the configmap yet, wait for create
@@ -394,7 +397,7 @@ func (r *reconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result
 					return nil
 				}
 				config := &openshiftcpv1.OpenShiftControllerManagerConfig{}
-				if configStr, exists := ocmConfigMap.Data[ocm.ConfigKey]; exists && len(configStr) > 0 {
+				if configStr, exists := ocmConfigMap.Data[ocmConfigKey]; exists && len(configStr) > 0 {
 					err := util.DeserializeResource(configStr, config, api.Scheme)
 					if err != nil {
 						return fmt.Errorf("unable to decode existing openshift controller manager configuration: %w", err)
@@ -405,7 +408,7 @@ func (r *reconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result
 				if err != nil {
 					return fmt.Errorf("failed to serialize openshift controller manager configuration: %w", err)
 				}
-				ocmConfigMap.Data[ocm.ConfigKey] = configStr
+				ocmConfigMap.Data[ocmConfigKey] = configStr
 				return nil
 			}); err != nil {
 				errs = append(errs, fmt.Errorf("failed to reconcile openshift-controller-manager config: %w", err))
@@ -1824,12 +1827,24 @@ func (r *reconciler) reconcileObservedConfiguration(ctx context.Context, hcp *hy
 
 }
 
+// AzureProviderConfig is a configMap for azure config.
+// TODO (alberto): can we drop this completely?
+// It has some consumers atm: it's reconciled into guest cluster, ignition local provider. Review them and drop it.
+func AzureProviderConfig(ns string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "azure-cloud-config",
+			Namespace: ns,
+		},
+	}
+}
+
 func (r *reconciler) reconcileCloudConfig(ctx context.Context, hcp *hyperv1.HostedControlPlane) error {
 
 	switch hcp.Spec.Platform.Type {
 	case hyperv1.AzurePlatform:
 		// This is needed for the e2e tests and only for Azure: https://github.com/openshift/origin/blob/625733dd1ce7ebf40c3dd0abd693f7bb54f2d580/test/extended/util/cluster/cluster.go#L186
-		reference := cpomanifests.AzureProviderConfig(hcp.Namespace)
+		reference := AzureProviderConfig(hcp.Namespace)
 		if err := r.cpClient.Get(ctx, client.ObjectKeyFromObject(reference), reference); err != nil {
 			return fmt.Errorf("failed to fetch %s/%s configmap from management cluster: %w", reference.Namespace, reference.Name, err)
 		}
@@ -1845,7 +1860,7 @@ func (r *reconciler) reconcileCloudConfig(ctx context.Context, hcp *hyperv1.Host
 			return fmt.Errorf("failed to reconcile the %s/%s configmap: %w", cm.Namespace, cm.Name, err)
 		}
 	case hyperv1.OpenStackPlatform:
-		reference := cpomanifests.OpenStackProviderConfig(hcp.Namespace)
+		reference := manifests.OpenStackProviderConfig(hcp.Namespace)
 		if err := r.cpClient.Get(ctx, client.ObjectKeyFromObject(reference), reference); err != nil {
 			return fmt.Errorf("failed to fetch %s/%s configmap from management cluster: %w", reference.Namespace, reference.Name, err)
 		}

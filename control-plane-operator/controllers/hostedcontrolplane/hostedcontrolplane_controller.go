@@ -14,19 +14,18 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	awsutil "github.com/openshift/hypershift/cmd/infra/aws/util"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/cno"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/common"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/ignition"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/ignitionserver"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/infra"
+	kas "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/infra"
+	oapi "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/infra"
+	oauth "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/infra/oauth"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/ingress"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/kas"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/konnectivity"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/mcs"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/oapi"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/oauth"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/pki"
 	autoscalerv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/autoscaler"
 	awsccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/aws"
@@ -44,6 +43,7 @@ import (
 	etcdv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/etcd"
 	ingressoperatorv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/ingressoperator"
 	kasv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
+	kasv2kms "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas/kms"
 	kcmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kcm"
 	schedulerv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kube_scheduler"
 	machineapproverv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/machine_approver"
@@ -424,7 +424,7 @@ func (r *HostedControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.R
 		switch hostedControlPlane.Spec.Etcd.ManagementType {
 		case hyperv1.Managed:
 			r.Log.Info("Reconciling etcd cluster status for managed strategy")
-			sts := manifests.EtcdStatefulSet(hostedControlPlane.Namespace)
+			sts := etcdv2.EtcdStatefulSet(hostedControlPlane.Namespace)
 			if err := r.Get(ctx, client.ObjectKeyFromObject(sts), sts); err != nil {
 				if apierrors.IsNotFound(err) {
 					newCondition = metav1.Condition{
@@ -461,7 +461,7 @@ func (r *HostedControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.R
 		restoreCondition := meta.FindStatusCondition(hostedControlPlane.Status.Conditions, string(hyperv1.EtcdSnapshotRestored))
 		if restoreCondition == nil {
 			r.Log.Info("Reconciling etcd cluster restore status")
-			sts := manifests.EtcdStatefulSet(hostedControlPlane.Namespace)
+			sts := etcdv2.EtcdStatefulSet(hostedControlPlane.Namespace)
 			if err := r.Get(ctx, client.ObjectKeyFromObject(sts), sts); err == nil {
 				newCondition := metav1.Condition{}
 				conditionPtr := r.etcdRestoredCondition(ctx, sts)
@@ -489,7 +489,7 @@ func (r *HostedControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.R
 			Status: metav1.ConditionUnknown,
 			Reason: hyperv1.StatusUnknownReason,
 		}
-		deployment := manifests.KASDeployment(hostedControlPlane.Namespace)
+		deployment := kasv2.KASDeployment(hostedControlPlane.Namespace)
 		if err := r.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
 			if apierrors.IsNotFound(err) {
 				newCondition = metav1.Condition{
@@ -695,7 +695,7 @@ func (r *HostedControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.R
 		meta.SetStatusCondition(&hostedControlPlane.Status.Conditions, condition)
 	}
 
-	kubeconfig := manifests.KASExternalKubeconfigSecret(hostedControlPlane.Namespace, hostedControlPlane.Spec.KubeConfig)
+	kubeconfig := kasv2.KASExternalKubeconfigSecret(hostedControlPlane.Namespace, hostedControlPlane.Spec.KubeConfig)
 	if err := r.Get(ctx, client.ObjectKeyFromObject(kubeconfig), kubeconfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return reconcile.Result{}, err
@@ -2002,7 +2002,7 @@ func (r *HostedControlPlaneReconciler) reconcilePKI(ctx context.Context, hcp *hy
 
 	// Cluster Node Tuning Operator metrics Serving Cert
 	NodeTuningOperatorServingCert := manifests.ClusterNodeTuningOperatorServingCertSecret(hcp.Namespace)
-	NodeTuningOperatorService := manifests.ClusterNodeTuningOperatorMetricsService(hcp.Namespace)
+	NodeTuningOperatorService := ntov2.ClusterNodeTuningOperatorMetricsService(hcp.Namespace)
 	err := removeServiceCAAnnotationAndSecret(ctx, r.Client, NodeTuningOperatorService, NodeTuningOperatorServingCert)
 	if err != nil {
 		r.Log.Error(err, "failed to remove service ca annotation and secret: %w")
@@ -2306,36 +2306,58 @@ func (r *HostedControlPlaneReconciler) reconcileValidIDPConfigurationCondition(c
 	return nil
 }
 
+func SetRestartAnnotationAndPatch(ctx context.Context, crclient client.Client, dep *appsv1.Deployment, restartAnnotation string) error {
+	if err := crclient.Get(ctx, client.ObjectKeyFromObject(dep), dep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed retrieve deployment: %w", err)
+	}
+
+	patch := dep.DeepCopy()
+	podMeta := patch.Spec.Template.ObjectMeta
+	if podMeta.Annotations == nil {
+		podMeta.Annotations = map[string]string{}
+	}
+	podMeta.Annotations[hyperv1.RestartDateAnnotation] = restartAnnotation
+
+	if err := crclient.Patch(ctx, patch, client.MergeFrom(dep)); err != nil {
+		return fmt.Errorf("failed to set restart annotation: %w", err)
+	}
+
+	return nil
+}
+
 func (r *HostedControlPlaneReconciler) cleanupClusterNetworkOperatorResources(ctx context.Context, hcp *hyperv1.HostedControlPlane, hasRouteCap bool) error {
 	if restartAnnotation, ok := hcp.Annotations[hyperv1.RestartDateAnnotation]; ok {
 		// CNO manages overall multus-admission-controller deployment. CPO manages restarts.
 		// TODO: why is this not done in CNO?
-		multusDeployment := manifests.MultusAdmissionControllerDeployment(hcp.Namespace)
-		if err := cno.SetRestartAnnotationAndPatch(ctx, r.Client, multusDeployment, restartAnnotation); err != nil {
+		multusDeployment := cnov2.MultusAdmissionControllerDeployment(hcp.Namespace)
+		if err := SetRestartAnnotationAndPatch(ctx, r.Client, multusDeployment, restartAnnotation); err != nil {
 			return fmt.Errorf("failed to restart multus admission controller: %w", err)
 		}
 
 		// CNO manages overall network-node-identity deployment. CPO manages restarts.
-		networkNodeIdentityDeployment := manifests.NetworkNodeIdentityDeployment(hcp.Namespace)
-		if err := cno.SetRestartAnnotationAndPatch(ctx, r.Client, networkNodeIdentityDeployment, restartAnnotation); err != nil {
+		networkNodeIdentityDeployment := cnov2.NetworkNodeIdentityDeployment(hcp.Namespace)
+		if err := SetRestartAnnotationAndPatch(ctx, r.Client, networkNodeIdentityDeployment, restartAnnotation); err != nil {
 			return fmt.Errorf("failed to restart network node identity: %w", err)
 		}
 	}
 
 	// Clean up ovnkube-sbdb Route if exists
 	if hasRouteCap {
-		if _, err := util.DeleteIfNeeded(ctx, r.Client, manifests.OVNKubeSBDBRoute(hcp.Namespace)); err != nil {
+		if _, err := util.DeleteIfNeeded(ctx, r.Client, cnov2.OVNKubeSBDBRoute(hcp.Namespace)); err != nil {
 			return fmt.Errorf("failed to clean up ovnkube-sbdb route: %w", err)
 		}
 	}
 
 	// Clean up ovnkube-master-external Service if exists
-	if _, err := util.DeleteIfNeeded(ctx, r.Client, manifests.MasterExternalService(hcp.Namespace)); err != nil {
+	if _, err := util.DeleteIfNeeded(ctx, r.Client, cnov2.MasterExternalService(hcp.Namespace)); err != nil {
 		return fmt.Errorf("failed to clean up ovnkube-master-external service: %w", err)
 	}
 
 	// Clean up ovnkube-master-internal Service if exists
-	if _, err := util.DeleteIfNeeded(ctx, r.Client, manifests.MasterInternalService(hcp.Namespace)); err != nil {
+	if _, err := util.DeleteIfNeeded(ctx, r.Client, cnov2.MasterInternalService(hcp.Namespace)); err != nil {
 		return fmt.Errorf("failed to clean up ovnkube-master-internal service: %w", err)
 	}
 
@@ -2842,7 +2864,7 @@ func (r *HostedControlPlaneReconciler) removeCloudResources(ctx context.Context,
 	}
 
 	// ensure CVO has been scaled down
-	cvoDeployment := manifests.ClusterVersionOperatorDeployment(hcp.Namespace)
+	cvoDeployment := cvov2.ClusterVersionOperatorDeployment(hcp.Namespace)
 	err := r.Get(ctx, client.ObjectKeyFromObject(cvoDeployment), cvoDeployment)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return false, fmt.Errorf("failed get CVO deployment: %w", err)
@@ -3165,7 +3187,7 @@ func (r *HostedControlPlaneReconciler) validateAWSKMSConfig(ctx context.Context,
 		return
 	}
 
-	token, err := util.CreateTokenForServiceAccount(ctx, manifests.KASContainerAWSKMSProviderServiceAccount(), guestClient)
+	token, err := util.CreateTokenForServiceAccount(ctx, kasv2kms.KASContainerAWSKMSProviderServiceAccount(), guestClient)
 	if err != nil {
 		// service account might not be created in the guest cluster or KAS is not operational.
 		condition := metav1.Condition{
@@ -3286,7 +3308,7 @@ func (r *HostedControlPlaneReconciler) validateAzureKMSConfig(ctx context.Contex
 }
 
 func (r *HostedControlPlaneReconciler) GetGuestClusterClient(ctx context.Context, hcp *hyperv1.HostedControlPlane) (*kubernetes.Clientset, error) {
-	kubeconfigSecret := manifests.KASExternalKubeconfigSecret(hcp.Namespace, hcp.Spec.KubeConfig)
+	kubeconfigSecret := kasv2.KASExternalKubeconfigSecret(hcp.Namespace, hcp.Spec.KubeConfig)
 	if err := r.Get(ctx, client.ObjectKeyFromObject(kubeconfigSecret), kubeconfigSecret); err != nil {
 		return nil, err
 	}
@@ -3327,8 +3349,17 @@ func (r *HostedControlPlaneReconciler) reconcileSREMetricsConfig(ctx context.Con
 	return nil
 }
 
+func OpenShiftTrustedCABundleFromCPO(namespace string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      "openshift-config-managed-trusted-ca-bundle",
+		},
+	}
+}
+
 func doesOpenShiftTrustedCABundleConfigMapForCPOExist(ctx context.Context, c client.Client, hcpNamespace string) (bool, error) {
-	openShiftTrustedCABundleConfigMapForCPO := manifests.OpenShiftTrustedCABundleFromCPO(hcpNamespace)
+	openShiftTrustedCABundleConfigMapForCPO := OpenShiftTrustedCABundleFromCPO(hcpNamespace)
 	if err := c.Get(ctx, client.ObjectKeyFromObject(openShiftTrustedCABundleConfigMapForCPO), openShiftTrustedCABundleConfigMapForCPO); err != nil {
 		// It's okay if this ConfigMap doesn't exist. It won't for non-OCP clusters. Only return an error if the error is something other than not existing.
 		if !apierrors.IsNotFound(err) {

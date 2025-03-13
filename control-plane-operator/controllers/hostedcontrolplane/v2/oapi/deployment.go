@@ -8,6 +8,7 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kcm"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/util"
@@ -140,7 +141,7 @@ func buildAdditionalTrustBundleProjectedVolume(additionalCAs []corev1.VolumeProj
 }
 
 func getServiceServingCA(cpContext component.WorkloadContext) (*corev1.ConfigMap, error) {
-	serviceServingCA := manifests.ServiceServingCA(cpContext.HCP.Namespace)
+	serviceServingCA := kcm.ServiceServingCA(cpContext.HCP.Namespace)
 	if err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(serviceServingCA), serviceServingCA); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get service serving CA")

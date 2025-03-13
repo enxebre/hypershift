@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/util"
 
@@ -58,7 +58,7 @@ func predicate(cpContext component.WorkloadContext) (bool, error) {
 		return false, nil
 	}
 
-	kubeConfigSecret := manifests.KASServiceKubeconfigSecret(hcp.Namespace)
+	kubeConfigSecret := kas.KASServiceKubeconfigSecret(hcp.Namespace)
 	if err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(kubeConfigSecret), kubeConfigSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil

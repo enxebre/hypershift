@@ -69,7 +69,7 @@ func adaptConfigMap(cpContext component.WorkloadContext, cm *corev1.ConfigMap) e
 		storageClassEnforcement = "allowDefault: true\nallowAll: false\n"
 	}
 	var infraClusterNamespace string
-	if isExternalInfraKubvirt(hcp) {
+	if IsExternalInfraKubevirt(hcp) {
 		infraClusterNamespace = hcp.Spec.Platform.Kubevirt.Credentials.InfraNamespace
 	} else {
 		infraClusterNamespace = cm.Namespace

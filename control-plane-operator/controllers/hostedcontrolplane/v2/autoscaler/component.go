@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/util"
 
@@ -58,7 +58,7 @@ func predicate(cpContext component.WorkloadContext) (bool, error) {
 		return false, nil
 	}
 	// Resolve the kubeconfig secret for CAPI which the autoscaler is deployed alongside of.
-	capiKubeConfigSecret := manifests.KASServiceCAPIKubeconfigSecret(hcp.Namespace, hcp.Spec.InfraID)
+	capiKubeConfigSecret := kas.KASServiceCAPIKubeconfigSecret(hcp.Namespace, hcp.Spec.InfraID)
 	if err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(capiKubeConfigSecret), capiKubeConfigSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil

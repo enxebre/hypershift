@@ -13,12 +13,3 @@ func OpenStackProviderConfig(ns string) *corev1.ConfigMap {
 		},
 	}
 }
-
-func OpenStackTrustedCA(ns string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "openstack-trusted-ca",
-			Namespace: ns,
-		},
-	}
-}

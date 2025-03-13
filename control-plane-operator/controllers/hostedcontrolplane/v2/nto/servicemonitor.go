@@ -4,7 +4,8 @@ import (
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/metrics"
 	"github.com/openshift/hypershift/support/util"
-
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	prometheusoperatorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -24,4 +25,17 @@ func adaptServiceMonitor(cpContext component.WorkloadContext, sm *prometheusoper
 	util.ApplyClusterIDLabel(&sm.Spec.Endpoints[0], cpContext.HCP.Spec.ClusterID)
 
 	return nil
+}
+
+// Funcs coming from old CPO manifests.
+func ClusterNodeTuningOperatorMetricsService(namespace string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "node-tuning-operator",
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "None",
+		},
+	}
 }

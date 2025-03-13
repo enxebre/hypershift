@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kcm"
 	resourcemanifests "github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/manifests"
 	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/upsert"
@@ -33,7 +34,7 @@ type syncDesc struct {
 func configMapsToSync(ns string) map[string]syncDesc {
 	return map[string]syncDesc{
 		"service-ca": {
-			destination: manifests.ServiceServingCA(ns),
+			destination: kcm.ServiceServingCA(ns),
 			sourceKey:   "ca-bundle.crt",
 			destKey:     "service-ca.crt",
 		},

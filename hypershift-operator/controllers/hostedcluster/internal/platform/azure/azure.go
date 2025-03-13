@@ -6,13 +6,13 @@ import (
 	"os"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/controlplaneoperator"
 	"github.com/openshift/hypershift/support/azureutil"
 	"github.com/openshift/hypershift/support/config"
 	"github.com/openshift/hypershift/support/images"
 	"github.com/openshift/hypershift/support/secretproviderclass"
 	"github.com/openshift/hypershift/support/upsert"
+	secretsstorev1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -71,7 +71,7 @@ func (a Azure) ReconcileCAPIInfraCR(
 	}
 
 	// Reconcile the SecretProviderClass
-	nodepoolMgmtSecretProviderClass := manifests.ManagedAzureSecretProviderClass(config.ManagedAzureNodePoolMgmtSecretProviderClassName, controlPlaneNamespace)
+	nodepoolMgmtSecretProviderClass := ManagedAzureSecretProviderClass(config.ManagedAzureNodePoolMgmtSecretProviderClassName, controlPlaneNamespace)
 	if _, err := createOrUpdate(ctx, c, nodepoolMgmtSecretProviderClass, func() error {
 		hcp := controlplaneoperator.HostedControlPlane(controlPlaneNamespace, hcluster.Name)
 		if err := c.Get(ctx, client.ObjectKeyFromObject(hcp), hcp); err != nil {
@@ -261,4 +261,13 @@ func reconcileAzureClusterIdentity(hc *hyperv1.HostedCluster, azureClusterIdenti
 		},
 	}
 	return nil
+}
+
+func ManagedAzureSecretProviderClass(name, namespace string) *secretsstorev1.SecretProviderClass {
+	return &secretsstorev1.SecretProviderClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
 }

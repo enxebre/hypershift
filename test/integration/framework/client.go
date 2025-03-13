@@ -14,7 +14,7 @@ import (
 	"time"
 
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	hcpmanifests "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	kas "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	homanifests "github.com/openshift/hypershift/hypershift-operator/controllers/manifests"
 
 	v1 "k8s.io/api/authentication/v1"
@@ -46,7 +46,7 @@ func WaitForGuestRestConfig(ctx context.Context, logger logr.Logger, opts *Optio
 	}
 
 	hostedControlPlaneNamespace := homanifests.HostedControlPlaneNamespace(hc.Namespace, hc.Name)
-	localKubeConfig := hcpmanifests.KASLocalhostKubeconfigSecret(hostedControlPlaneNamespace)
+	localKubeConfig := kas.KASLocalhostKubeconfigSecret(hostedControlPlaneNamespace)
 	if err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 2*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 		s, err := mgmtKubeClient.CoreV1().Secrets(localKubeConfig.Namespace).Get(ctx, localKubeConfig.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {

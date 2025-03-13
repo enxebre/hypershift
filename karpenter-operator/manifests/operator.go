@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/controlplaneoperator"
 	"github.com/openshift/hypershift/support/config"
-	kas "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/upsert"
 	"github.com/openshift/hypershift/support/util"
 
@@ -410,7 +409,7 @@ func ReconcileKarpenterOperator(ctx context.Context, createOrUpdate upsert.Creat
 	// The deployment depends on the kubeconfig being reported.
 	if hcp.Status.KubeConfig != nil {
 		// Resolve the kubeconfig secret for HCCO which is used for karpeneter for convenience
-		kubeConfigSecret := manifests.HCCOKubeconfigSecret(hcp.Namespace)
+		kubeConfigSecret := kas.HCCOKubeconfigSecret(hcp.Namespace)
 		err = c.Get(ctx, client.ObjectKeyFromObject(kubeConfigSecret), kubeConfigSecret)
 		if err != nil {
 			return fmt.Errorf("failed to get hosted controlplane kubeconfig secret %q: %w", kubeConfigSecret.Name, err)

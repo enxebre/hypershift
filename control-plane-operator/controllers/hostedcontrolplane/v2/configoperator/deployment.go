@@ -6,6 +6,9 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/csi/kubevirt"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
+
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/proxy"
 	"github.com/openshift/hypershift/support/util"
@@ -83,7 +86,7 @@ func (h *hcco) adaptDeployment(cpContext component.WorkloadContext, deployment *
 	})
 
 	util.UpdateVolume(kubeconfigVolumeName, deployment.Spec.Template.Spec.Volumes, func(v *corev1.Volume) {
-		v.VolumeSource.Secret.SecretName = manifests.HCCOKubeconfigSecret("").Name
+		v.VolumeSource.Secret.SecretName = kas.HCCOKubeconfigSecret("").Name
 	})
 	util.UpdateVolume(rootCAVolumeName, deployment.Spec.Template.Spec.Volumes, func(v *corev1.Volume) {
 		v.VolumeSource.ConfigMap.Name = manifests.RootCAConfigMap("").Name
@@ -92,21 +95,10 @@ func (h *hcco) adaptDeployment(cpContext component.WorkloadContext, deployment *
 		v.VolumeSource.ConfigMap.Name = manifests.KubeletClientCABundle("").Name
 	})
 
-	if isExternalInfraKubevirt(hcp) {
+	if kubevirt.IsExternalInfraKubevirt(hcp) {
 		// injects the kubevirt credentials secret volume, volume mount path, and appends cli arg.
 		util.DeploymentAddKubevirtInfraCredentials(deployment)
 	}
 
 	return nil
-}
-
-func isExternalInfraKubevirt(hcp *hyperv1.HostedControlPlane) bool {
-	if hcp.Spec.Platform.Kubevirt != nil &&
-		hcp.Spec.Platform.Kubevirt.Credentials != nil &&
-		hcp.Spec.Platform.Kubevirt.Credentials.InfraKubeConfigSecret != nil &&
-		hcp.Spec.Platform.Kubevirt.Credentials.InfraNamespace != "" {
-		return true
-	} else {
-		return false
-	}
 }

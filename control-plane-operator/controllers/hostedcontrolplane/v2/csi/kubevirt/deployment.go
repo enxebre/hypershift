@@ -16,7 +16,7 @@ const (
 )
 
 func adaptDeployment(cpContext component.WorkloadContext, deployment *appsv1.Deployment) error {
-	if !isExternalInfraKubvirt(cpContext.HCP) {
+	if !IsExternalInfraKubevirt(cpContext.HCP) {
 		return nil
 	}
 
@@ -45,7 +45,7 @@ func adaptDeployment(cpContext component.WorkloadContext, deployment *appsv1.Dep
 	return nil
 }
 
-func isExternalInfraKubvirt(hcp *hyperv1.HostedControlPlane) bool {
+func IsExternalInfraKubevirt(hcp *hyperv1.HostedControlPlane) bool {
 	if hcp.Spec.Platform.Kubevirt != nil &&
 		hcp.Spec.Platform.Kubevirt.Credentials != nil &&
 		hcp.Spec.Platform.Kubevirt.Credentials.InfraKubeConfigSecret != nil &&

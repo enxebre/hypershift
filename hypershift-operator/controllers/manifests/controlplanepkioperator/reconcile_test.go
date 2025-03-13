@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/control-plane-pki-operator/certificates"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/controlplanepkioperator"
 	"github.com/openshift/hypershift/support/api"
@@ -51,7 +50,7 @@ func TestReconcileCSRApproverClusterRoleBinding(t *testing.T) {
 		Namespace: "test-namespace",
 		Name:      "test-hc",
 	}}
-	serviceAccount := manifests.PKIOperatorServiceAccount("test-namespace")
+	serviceAccount := controlplanepkioperator.PKIOperatorServiceAccount("test-namespace")
 	clusterRole := controlplanepkioperator.CSRApproverClusterRole(hostedCluster)
 	clusterRoleBinding := controlplanepkioperator.ClusterRoleBinding(hostedCluster, clusterRole)
 	if err := controlplanepkioperator.ReconcileClusterRoleBinding(clusterRoleBinding, clusterRole, serviceAccount); err != nil {
@@ -69,7 +68,7 @@ func TestReconcileCSRSignerClusterRoleBinding(t *testing.T) {
 		Namespace: "test-namespace",
 		Name:      "test-hc",
 	}}
-	serviceAccount := manifests.PKIOperatorServiceAccount("test-namespace")
+	serviceAccount := controlplanepkioperator.PKIOperatorServiceAccount("test-namespace")
 	clusterRole := controlplanepkioperator.CSRSignerClusterRole(hostedCluster)
 	clusterRoleBinding := controlplanepkioperator.ClusterRoleBinding(hostedCluster, clusterRole)
 	if err := controlplanepkioperator.ReconcileClusterRoleBinding(clusterRoleBinding, clusterRole, serviceAccount); err != nil {

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/util"
@@ -15,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func adaptStatefulSet(cpContext component.WorkloadContext, sts *appsv1.StatefulSet) error {
@@ -73,7 +73,7 @@ func adaptStatefulSet(cpContext component.WorkloadContext, sts *appsv1.StatefulS
 
 	if defragControllerPredicate(cpContext) {
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers, buildEtcdDefragControllerContainer(hcp.Namespace))
-		sts.Spec.Template.Spec.ServiceAccountName = manifests.EtcdDefragControllerServiceAccount("").Name
+		sts.Spec.Template.Spec.ServiceAccountName = EtcdDefragControllerServiceAccount("").Name
 	}
 
 	snapshotRestored := meta.IsStatusConditionTrue(hcp.Status.Conditions, string(hyperv1.EtcdSnapshotRestored))
@@ -154,4 +154,13 @@ func buildEtcdDefragControllerContainer(namespace string) corev1.Container {
 		},
 	}
 	return c
+}
+
+func EtcdStatefulSet(ns string) *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "etcd",
+			Namespace: ns,
+		},
+	}
 }

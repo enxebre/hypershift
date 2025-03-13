@@ -13,6 +13,7 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	"github.com/openshift/hypershift/support/util"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -322,7 +323,7 @@ func TestTransportForCARef(t *testing.T) {
 			}
 
 			// Kubeconfig used by the konnectivity dialer to connect to the guest cluster and resolve SVCs DNS.
-			kubeconfigSecret := manifests.KASServiceKubeconfigSecret(namespace)
+			kubeconfigSecret := kas.KASServiceKubeconfigSecret(namespace)
 			kubeconfigSecret.Data = map[string][]byte{
 				kubeconfigDataKey: []byte(fmt.Sprintf(`
 apiVersion: v1

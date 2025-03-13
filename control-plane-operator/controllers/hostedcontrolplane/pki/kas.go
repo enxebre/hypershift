@@ -23,6 +23,16 @@ const (
 	ServiceSignerPublicKey  = "service-account.pub"
 )
 
+type KubeconfigScope string
+
+const (
+	// KubeconfigScopeLabel is used to indicate the usage scope of the kubeconfig
+	KubeconfigScopeLabel = "hypershift.openshift.io/kubeconfig"
+	// KubeconfigScopeLocal means the kubeconfig is for use by cluster-local
+	// clients (e.g. the service network)
+	KubeconfigScopeLocal KubeconfigScope = "local"
+)
+
 func ReconcileKASServerCertSecret(secret, ca *corev1.Secret, ownerRef config.OwnerRef, externalAPIAddress, internalAPIAddress string, serviceCIDRs []string, nodeInternalAPIServerIP string) error {
 	svcAddresses := make([]string, 0)
 
@@ -110,14 +120,14 @@ func ReconcileServiceAccountKubeconfig(secret, csrSigner *corev1.Secret, ca *cor
 		return fmt.Errorf("failed to reconcile serviceaccount client cert: %w", err)
 	}
 	svcURL := inClusterKASURL(hcp.Spec.Platform.Type)
-	return ReconcileKubeConfig(secret, secret, ca, svcURL, "", manifests.KubeconfigScopeLocal, config.OwnerRef{})
+	return ReconcileKubeConfig(secret, secret, ca, svcURL, "", KubeconfigScopeLocal, config.OwnerRef{})
 }
 
 func isNumericIP(s string) bool {
 	return net.ParseIP(s) != nil
 }
 
-func ReconcileKubeConfig(secret, cert *corev1.Secret, ca *corev1.ConfigMap, url string, key string, scope manifests.KubeconfigScope, ownerRef config.OwnerRef) error {
+func ReconcileKubeConfig(secret, cert *corev1.Secret, ca *corev1.ConfigMap, url string, key string, scope KubeconfigScope, ownerRef config.OwnerRef) error {
 	ownerRef.ApplyTo(secret)
 	caPEM := ca.Data[certs.CASignerCertMapKey]
 	crtBytes, keyBytes := cert.Data[corev1.TLSCertKey], cert.Data[corev1.TLSPrivateKeyKey]
@@ -134,7 +144,7 @@ func ReconcileKubeConfig(secret, cert *corev1.Secret, ca *corev1.ConfigMap, url 
 	if secret.Labels == nil {
 		secret.Labels = map[string]string{}
 	}
-	secret.Labels[manifests.KubeconfigScopeLabel] = string(scope)
+	secret.Labels[KubeconfigScopeLabel] = string(scope)
 	secret.Data[key] = kubeCfgBytes
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests"
 
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -49,6 +50,15 @@ func ClusterRoleBinding(hc *hypershiftv1beta1.HostedCluster, clusterRole *rbacv1
 				OwningHostedClusterNamespaceLabel: hc.Namespace,
 				OwningHostedClusterNameLabel:      hc.Name,
 			},
+		},
+	}
+}
+
+func PKIOperatorServiceAccount(controlPlaneOperatorNamespace string) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: controlPlaneOperatorNamespace,
+			Name:      "control-plane-pki-operator",
 		},
 	}
 }

@@ -1,4 +1,4 @@
-package kas
+package infra
 
 import (
 	"fmt"
@@ -18,6 +18,35 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
+
+const (
+	KonnectivityHealthPort      = 2041
+	KonnectivityServerLocalPort = 8090
+	KonnectivityServerPort      = 8091
+)
+
+func kasLabels() map[string]string {
+	return map[string]string{
+		"app":                              "kube-apiserver",
+		hyperv1.ControlPlaneComponentLabel: "kube-apiserver",
+	}
+}
+
+func NewKubeAPIServerServiceParams(hcp *hyperv1.HostedControlPlane) *KubeAPIServerServiceParams {
+	var allowedCIDRBlocks []string
+	for _, block := range util.AllowedCIDRBlocks(hcp) {
+		allowedCIDRBlocks = append(allowedCIDRBlocks, string(block))
+	}
+	return &KubeAPIServerServiceParams{
+		AllowedCIDRBlocks: allowedCIDRBlocks,
+		OwnerReference:    config.ControllerOwnerRef(hcp),
+	}
+}
+
+type KubeAPIServerServiceParams struct {
+	AllowedCIDRBlocks []string
+	OwnerReference    *metav1.OwnerReference
+}
 
 func ReconcileService(svc *corev1.Service, strategy *hyperv1.ServicePublishingStrategy, owner *metav1.OwnerReference, apiServerServicePort int, apiAllowedCIDRBlocks []string, hcp *hyperv1.HostedControlPlane) error {
 	isPublic := util.IsPublicHCP(hcp)
