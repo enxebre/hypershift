@@ -6,6 +6,9 @@ data:
     VPC = %s
     KubernetesClusterID = %s
     SubnetID = %s
+
+    [Shared]
+    DisableSecurityGroupIngress = true
 kind: ConfigMap
 metadata:
   name: aws-cloud-config
