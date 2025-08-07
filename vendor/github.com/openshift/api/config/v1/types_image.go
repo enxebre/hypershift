@@ -77,6 +77,7 @@ type ImageSpec struct {
 	// imageregistry pullthrough.
 	// The namespace for this config map is openshift-config.
 	// +optional
+	// Shouldn't this be included in the nodepools payload?
 	AdditionalTrustedCA ConfigMapNameReference `json:"additionalTrustedCA"`
 
 	// registrySources contains configuration that determines how the container runtime
@@ -84,6 +85,7 @@ type ImageSpec struct {
 	// whether or not to allow insecure access).  It does not contain configuration for the
 	// internal cluster registry.
 	// +optional
+	// +openshift:exclude:type=HostedCluster
 	RegistrySources RegistrySources `json:"registrySources"`
 
 	// imageStreamImportMode controls the import mode behaviour of imagestreams.
@@ -99,6 +101,7 @@ type ImageSpec struct {
 	// implies the import mode is Legacy and multi payload implies PreserveOriginal.
 	// +openshift:enable:FeatureGate=ImageStreamImportMode
 	// +optional
+	// +openshift:exclude:type=HostedCluster
 	ImageStreamImportMode ImportModeType `json:"imageStreamImportMode"`
 }
 

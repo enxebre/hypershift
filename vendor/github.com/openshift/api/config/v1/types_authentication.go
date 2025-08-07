@@ -67,6 +67,7 @@ type AuthenticationSpec struct {
 	// Can only be set if "Type" is set to "None".
 	//
 	// +optional
+	// +openshift:exclude:type=HostedCluster
 	WebhookTokenAuthenticator *WebhookTokenAuthenticator `json:"webhookTokenAuthenticator,omitempty"`
 
 	// serviceAccountIssuer is the identifier of the bound service account token
@@ -207,7 +208,7 @@ type OIDCProvider struct {
 	Name string `json:"name"`
 
 	// issuer is a required field that configures how the platform interacts
-	// with the identity provider and how tokens issued from the identity provider 
+	// with the identity provider and how tokens issued from the identity provider
 	// are evaluated by the Kubernetes API server.
 	//
 	// +required

@@ -46,12 +46,14 @@ type NetworkSpec struct {
 	// IP address pool to use for pod IPs.
 	// This field is immutable after installation.
 	// +listType=atomic
+	// Used for resources.go synced with the HC.spec
 	ClusterNetwork []ClusterNetworkEntry `json:"clusterNetwork"`
 
 	// IP address pool for services.
 	// Currently, we only support a single entry here.
 	// This field is immutable after installation.
 	// +listType=atomic
+	// Used for resources.go synced with the HC.spec
 	ServiceNetwork []string `json:"serviceNetwork"`
 
 	// networkType is the plugin that is to be deployed (e.g. OVNKubernetes).
@@ -60,6 +62,7 @@ type NetworkSpec struct {
 	// Currently supported values are:
 	// - OVNKubernetes
 	// This field is immutable after installation.
+	// Used for resources.go synced with the HC.spec
 	NetworkType string `json:"networkType"`
 
 	// externalIP defines configuration for controllers that
@@ -86,6 +89,7 @@ type NetworkSpec struct {
 	//
 	// +optional
 	// +openshift:enable:FeatureGate=NetworkDiagnosticsConfig
+	// Disable this gate in hypershift profile
 	NetworkDiagnostics NetworkDiagnostics `json:"networkDiagnostics"`
 }
 

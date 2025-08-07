@@ -20,6 +20,7 @@ type OperatorHubSpec struct {
 	// default hub sources and their current state will always be reflected in
 	// the status block.
 	// +optional
+	//+openshift:exclude:type=HostedCluster
 	Sources []HubSource `json:"sources,omitempty"`
 }
 

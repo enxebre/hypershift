@@ -45,6 +45,7 @@ type APIServerSpec struct {
 	// The ConfigMap must exist in the openshift-config namespace and contain the following required fields:
 	// - ConfigMap.Data["ca-bundle.crt"] - CA bundle.
 	// +optional
+	//+openshift:exclude:type=HostedCluster
 	ClientCA ConfigMapNameReference `json:"clientCA"`
 	// additionalCORSAllowedOrigins lists additional, user-defined regular expressions describing hosts for which the
 	// API server allows access using the CORS headers. This may be needed to access the API and the integrated OAuth
@@ -55,6 +56,8 @@ type APIServerSpec struct {
 	AdditionalCORSAllowedOrigins []string `json:"additionalCORSAllowedOrigins,omitempty"`
 	// encryption allows the configuration of encryption of resources at the datastore layer.
 	// +optional
+	//+openshift:exclude:type=HostedCluster
+	// exposed in HC
 	Encryption APIServerEncryption `json:"encryption"`
 	// tlsSecurityProfile specifies settings for TLS connections for externally exposed servers.
 	//

@@ -50,6 +50,7 @@ type SchedulerSpec struct {
 	// profileCustomizations contains configuration for modifying the default behavior of existing scheduler profiles.
 	// +openshift:enable:FeatureGate=DynamicResourceAllocation
 	// +optional
+	//+openshift:exclude:type=HostedCluster disable in crd generation / hcp profile
 	ProfileCustomizations ProfileCustomizations `json:"profileCustomizations"`
 	// defaultNodeSelector helps set the cluster-wide default node selector to
 	// restrict pod placement to specific nodes. This is applied to the pods
@@ -72,6 +73,7 @@ type SchedulerSpec struct {
 	// that the default of "type=user-node,region=east" set in defaultNodeSelector
 	// would not be applied.
 	// +optional
+	//+openshift:exclude:type=HostedCluster disable in crd generation / hcp profile
 	DefaultNodeSelector string `json:"defaultNodeSelector,omitempty"`
 	// mastersSchedulable allows masters nodes to be schedulable. When this flag is
 	// turned on, all the master nodes in the cluster will be made schedulable,
@@ -82,6 +84,7 @@ type SchedulerSpec struct {
 	// are not impacted.
 	// Please turn on this field after doing due diligence.
 	// +optional
+	//+openshift:exclude:type=HostedCluster disable in crd generation / hcp profile
 	MastersSchedulable bool `json:"mastersSchedulable"`
 }
 
