@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-controller-manager
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: cloud-controller-manager
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: cloud-controller-manager
+    spec:
+      serviceAccountName: cloud-controller-manager
+      containers:
+      - args:
+        - --cloud-provider=gcp
+        - --use-service-account-credentials=false
+        - --kubeconfig=/etc/kubernetes/kubeconfig/kubeconfig
+        - --cloud-config=/etc/cloud/gcp.conf
+        - --configure-cloud-routes=false
+        - --leader-elect=true
+        - --leader-elect-lease-duration=137s
+        - --leader-elect-renew-deadline=107s
+        - --leader-elect-retry-period=26s
+        - --leader-elect-resource-namespace=openshift-cloud-controller-manager
+        - --authentication-kubeconfig=/etc/kubernetes/kubeconfig/kubeconfig
+        - --authorization-kubeconfig=/etc/kubernetes/kubeconfig/kubeconfig
+        - --bind-address=0.0.0.0
+        - --secure-port=10258
+        - --tls-cert-file=/etc/kubernetes/certs/tls.crt
+        - --tls-private-key-file=/etc/kubernetes/certs/tls.key
+        command:
+        - /bin/gcp-cloud-controller-manager
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /etc/kubernetes/secrets/gcp/service-account.json
+        image: gcp-cloud-controller-manager
+        imagePullPolicy: IfNotPresent
+        name: cloud-controller-manager-gcp
+        resources:
+          requests:
+            cpu: 75m
+            memory: 60Mi
+        volumeMounts:
+        - mountPath: /etc/cloud
+          name: cloud-config
+        - mountPath: /etc/kubernetes/kubeconfig
+          name: kubeconfig
+        - mountPath: /etc/kubernetes/secrets/gcp
+          name: gcp-credentials
+        - mountPath: /etc/kubernetes/certs
+          name: serving-cert
+      volumes:
+      - name: kubeconfig
+        secret:
+          defaultMode: 420
+          secretName: service-network-admin-kubeconfig
+      - configMap:
+          defaultMode: 420
+          name: gcp-cloud-config
+        name: cloud-config
+      - name: gcp-credentials
+        secret:
+          defaultMode: 420
+          secretName: gcp-cloud-credentials
+      - name: serving-cert
+        secret:
+          defaultMode: 420
+          secretName: cloud-controller-manager-gcp-serving-cert

@@ -447,8 +447,8 @@ type NodePoolPlatform struct {
 	// +unionDiscriminator
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf", message="Type is immutable"
 	// +immutable
-	// +openshift:validation:FeatureGateAwareEnum:featureGate="",enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None
-	// +openshift:validation:FeatureGateAwareEnum:featureGate=OpenStack,enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;OpenStack
+	// +openshift:validation:FeatureGateAwareEnum:featureGate="",enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;GCP
+	// +openshift:validation:FeatureGateAwareEnum:featureGate=OpenStack,enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;OpenStack;GCP
 	// +required
 	Type PlatformType `json:"type"`
 
@@ -486,6 +486,11 @@ type NodePoolPlatform struct {
 	// +optional
 	// +openshift:enable:FeatureGate=OpenStack
 	OpenStack *OpenStackNodePoolPlatform `json:"openstack,omitempty"`
+
+	// gcp specifies the configuration used when using GCP platform.
+	//
+	// +optional
+	GCP *GCPNodePoolPlatform `json:"gcp,omitempty"`
 }
 
 // We define our own condition type since metav1.Condition has validation
@@ -566,4 +571,21 @@ type NodePoolPlatformStatus struct {
 	// kubeVirt contains the KubeVirt platform statuses
 	// +optional
 	KubeVirt *KubeVirtNodePoolStatus `json:"kubeVirt,omitempty"`
+
+	// gcp contains the GCP platform statuses
+	// +optional
+	GCP *GCPNodePoolStatus `json:"gcp,omitempty"`
+}
+
+// GCPNodePoolStatus contains status information specific to GCP NodePools.
+type GCPNodePoolStatus struct {
+	// machineType is the machine type used for the instances.
+	//
+	// +optional
+	MachineType string `json:"machineType,omitempty"`
+
+	// zone is the zone where the instances are running.
+	//
+	// +optional
+	Zone string `json:"zone,omitempty"`
 }

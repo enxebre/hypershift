@@ -8,6 +8,7 @@ import (
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/agent"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/aws"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/azure"
+	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/gcp"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/ibmcloud"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/kubevirt"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/hostedcluster/internal/platform/none"
@@ -28,6 +29,7 @@ import (
 const (
 	AWSCAPIProvider             = "aws-cluster-api-controllers"
 	AzureCAPIProvider           = "azure-cluster-api-controllers"
+	GCPCAPIProvider             = "gcp-cluster-api-controllers"
 	PowerVSCAPIProvider         = "ibmcloud-cluster-api-controllers"
 	OpenStackCAPIProvider       = "openstack-cluster-api-controllers"
 	OpenStackResourceController = "openstack-resource-controller"
@@ -35,6 +37,7 @@ const (
 
 var _ Platform = aws.AWS{}
 var _ Platform = azure.Azure{}
+var _ Platform = gcp.GCP{}
 var _ Platform = ibmcloud.IBMCloud{}
 var _ Platform = none.None{}
 var _ Platform = agent.Agent{}
@@ -152,6 +155,18 @@ func GetPlatform(ctx context.Context, hcluster *hyperv1.HostedCluster, releasePr
 			}
 		}
 		platform = openstack.New(capiImageProvider, orcImage, payloadVersion)
+	case hyperv1.GCPPlatform:
+		if pullSecretBytes != nil {
+			capiImageProvider, err = imgUtil.GetPayloadImage(ctx, releaseProvider, hcluster, GCPCAPIProvider, pullSecretBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to retrieve capi image: %w", err)
+			}
+			payloadVersion, err = imgUtil.GetPayloadVersion(ctx, releaseProvider, hcluster, pullSecretBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch payload version: %w", err)
+			}
+		}
+		platform = gcp.New(capiImageProvider, payloadVersion)
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", hcluster.Spec.Platform.Type)
 	}

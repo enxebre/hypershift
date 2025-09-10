@@ -73,6 +73,13 @@ func (defaulter *hostedClusterDefaulter) Default(ctx context.Context, obj runtim
 			}
 			hcluster.Spec.Services = append(hcluster.Spec.Services, entry)
 		}
+	case hyperv1.GCPPlatform:
+		if hcluster.Spec.Platform.GCP == nil {
+			hcluster.Spec.Platform.GCP = &hyperv1.GCPPlatformSpec{}
+		}
+		if hcluster.Spec.Networking.NetworkType == "" {
+			hcluster.Spec.Networking.NetworkType = hyperv1.OVNKubernetes
+		}
 	}
 
 	return nil
@@ -160,6 +167,8 @@ func (v hostedClusterValidator) ValidateCreate(ctx context.Context, obj runtime.
 	switch hc.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
 		return v.validateCreateKubevirtHostedCluster(ctx, hc)
+	case hyperv1.GCPPlatform:
+		return v.validateCreateGCPHostedCluster(ctx, hc)
 	default:
 		return nil, nil // no validation needed
 	}
@@ -179,6 +188,11 @@ func (v hostedClusterValidator) ValidateUpdate(ctx context.Context, oldHC, newHC
 	switch hc.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
 		err := v.validateUpdateKubevirtHostedCluster(ctx, hcOld, hc)
+		if err != nil {
+			return nil, err
+		}
+	case hyperv1.GCPPlatform:
+		err := v.validateUpdateGCPHostedCluster(ctx, hcOld, hc)
 		if err != nil {
 			return nil, err
 		}
@@ -208,6 +222,82 @@ func (v hostedClusterValidator) validateUpdateKubevirtHostedCluster(ctx context.
 	return nil
 }
 
+func (v hostedClusterValidator) validateCreateGCPHostedCluster(ctx context.Context, hc *hyperv1.HostedCluster) (admission.Warnings, error) {
+	if hc.Spec.Platform.GCP == nil {
+		return nil, fmt.Errorf("GCP platform configuration is required")
+	}
+
+	gcpSpec := hc.Spec.Platform.GCP
+
+	// Validate required fields
+	if gcpSpec.Project == "" {
+		return nil, fmt.Errorf("GCP project is required")
+	}
+
+	if gcpSpec.Region == "" {
+		return nil, fmt.Errorf("GCP region is required")
+	}
+
+	// Validate project ID format (basic validation)
+	if len(gcpSpec.Project) < 6 || len(gcpSpec.Project) > 30 {
+		return nil, fmt.Errorf("GCP project ID must be between 6 and 30 characters")
+	}
+
+	// Validate region format (basic validation)
+	if len(gcpSpec.Region) < 3 {
+		return nil, fmt.Errorf("GCP region format is invalid")
+	}
+
+	// Validate zone format if specified
+	if gcpSpec.Zone != "" && len(gcpSpec.Zone) < 3 {
+		return nil, fmt.Errorf("GCP zone format is invalid")
+	}
+
+	// Validate network configuration
+	if gcpSpec.Network != nil {
+		if gcpSpec.Network.Network != "" && len(gcpSpec.Network.Network) < 1 {
+			return nil, fmt.Errorf("GCP network name cannot be empty")
+		}
+		if gcpSpec.Network.Subnetwork != "" && len(gcpSpec.Network.Subnetwork) < 1 {
+			return nil, fmt.Errorf("GCP subnetwork name cannot be empty")
+		}
+	}
+
+	// Validate labels
+	if gcpSpec.Labels != nil {
+		for key, value := range gcpSpec.Labels {
+			if len(key) == 0 || len(key) > 63 {
+				return nil, fmt.Errorf("GCP label key '%s' must be between 1 and 63 characters", key)
+			}
+			if len(value) > 63 {
+				return nil, fmt.Errorf("GCP label value for key '%s' must not exceed 63 characters", key)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func (v hostedClusterValidator) validateUpdateGCPHostedCluster(ctx context.Context, oldHC, newHC *hyperv1.HostedCluster) error {
+	if newHC.Spec.Platform.GCP == nil {
+		return fmt.Errorf("GCP platform configuration is required")
+	}
+
+	// Check that immutable fields haven't changed
+	if oldHC.Spec.Platform.GCP != nil {
+		if oldHC.Spec.Platform.GCP.Project != newHC.Spec.Platform.GCP.Project {
+			return fmt.Errorf("GCP project is immutable")
+		}
+		if oldHC.Spec.Platform.GCP.Region != newHC.Spec.Platform.GCP.Region {
+			return fmt.Errorf("GCP region is immutable")
+		}
+	}
+
+	// Run the same validation as create
+	_, err := v.validateCreateGCPHostedCluster(ctx, newHC)
+	return err
+}
+
 type nodePoolValidator struct {
 	logger logr.Logger
 }
@@ -227,6 +317,8 @@ func (v nodePoolValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 	switch np.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
 		return v.validateCreateKubevirtNodePool(ctx, np)
+	case hyperv1.GCPPlatform:
+		return v.validateCreateGCPNodePool(ctx, np)
 	default:
 		return nil, nil // no validation needed
 	}
@@ -246,6 +338,11 @@ func (v nodePoolValidator) ValidateUpdate(ctx context.Context, oldNP, newNP runt
 	switch npNew.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
 		err := v.validateUpdateKubevirtNodePool(ctx, npOld, npNew)
+		if err != nil {
+			return nil, err
+		}
+	case hyperv1.GCPPlatform:
+		err := v.validateUpdateGCPNodePool(ctx, npOld, npNew)
 		if err != nil {
 			return nil, err
 		}
@@ -273,6 +370,86 @@ func (v nodePoolValidator) validateUpdateKubevirtNodePool(ctx context.Context, o
 		return err
 	}
 	return nil
+}
+
+func (v nodePoolValidator) validateCreateGCPNodePool(ctx context.Context, np *hyperv1.NodePool) (admission.Warnings, error) {
+	if np.Spec.Platform.GCP == nil {
+		return nil, fmt.Errorf("GCP nodepool platform configuration is required")
+	}
+
+	gcpSpec := np.Spec.Platform.GCP
+
+	// Validate required fields
+	if gcpSpec.MachineType == "" {
+		return nil, fmt.Errorf("GCP machine type is required")
+	}
+
+	// Validate machine type format (basic validation)
+	if len(gcpSpec.MachineType) < 3 {
+		return nil, fmt.Errorf("GCP machine type format is invalid")
+	}
+
+	// Validate disk configuration
+	if gcpSpec.DiskSizeGb != 0 && (gcpSpec.DiskSizeGb < 20 || gcpSpec.DiskSizeGb > 65536) {
+		return nil, fmt.Errorf("GCP disk size must be between 20 and 65536 GB")
+	}
+
+	// Validate disk type
+	if gcpSpec.DiskType != "" {
+		validDiskTypes := []string{"pd-ssd", "pd-standard", "pd-balanced"}
+		isValid := false
+		for _, validType := range validDiskTypes {
+			if gcpSpec.DiskType == validType {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return nil, fmt.Errorf("GCP disk type must be one of: pd-ssd, pd-standard, pd-balanced")
+		}
+	}
+
+	// Validate on host maintenance
+	if gcpSpec.OnHostMaintenance != "" {
+		if gcpSpec.OnHostMaintenance != "MIGRATE" && gcpSpec.OnHostMaintenance != "TERMINATE" {
+			return nil, fmt.Errorf("GCP onHostMaintenance must be either MIGRATE or TERMINATE")
+		}
+	}
+
+	// Validate labels
+	if gcpSpec.Labels != nil {
+		for key, value := range gcpSpec.Labels {
+			if len(key) == 0 || len(key) > 63 {
+				return nil, fmt.Errorf("GCP label key '%s' must be between 1 and 63 characters", key)
+			}
+			if len(value) > 63 {
+				return nil, fmt.Errorf("GCP label value for key '%s' must not exceed 63 characters", key)
+			}
+		}
+	}
+
+	// Validate tags
+	if len(gcpSpec.Tags) > 64 {
+		return nil, fmt.Errorf("GCP tags cannot exceed 64 items")
+	}
+
+	for _, tag := range gcpSpec.Tags {
+		if len(tag) == 0 || len(tag) > 63 {
+			return nil, fmt.Errorf("GCP tag '%s' must be between 1 and 63 characters", tag)
+		}
+	}
+
+	return nil, nil
+}
+
+func (v nodePoolValidator) validateUpdateGCPNodePool(ctx context.Context, oldNP, newNP *hyperv1.NodePool) error {
+	if newNP.Spec.Platform.GCP == nil {
+		return fmt.Errorf("GCP nodepool platform configuration is required")
+	}
+
+	// Run the same validation as create
+	_, err := v.validateCreateGCPNodePool(ctx, newNP)
+	return err
 }
 
 func validateJsonAnnotation(annotations map[string]string) error {

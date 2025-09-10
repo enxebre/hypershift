@@ -32,6 +32,7 @@ import (
 	autoscalerv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/autoscaler"
 	awsccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/aws"
 	azureccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/azure"
+	gcpccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/gcp"
 	kubevirtccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/kubevirt"
 	openstackccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/openstack"
 	powervsccmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/cloud_controller_manager/powervs"
@@ -245,6 +246,7 @@ func (r *HostedControlPlaneReconciler) registerComponents(hcp *hyperv1.HostedCon
 		configoperatorv2.NewComponent(r.ReleaseProvider.GetRegistryOverrides(), r.ReleaseProvider.GetOpenShiftImageRegistryOverrides(), hcp.Spec.Capabilities),
 		awsccmv2.NewComponent(),
 		azureccmv2.NewComponent(),
+		gcpccmv2.NewComponent(),
 		kubevirtccmv2.NewComponent(),
 		openstackccmv2.NewComponent(),
 		powervsccmv2.NewComponent(),

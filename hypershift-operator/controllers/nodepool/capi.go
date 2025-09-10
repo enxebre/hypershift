@@ -26,6 +26,7 @@ import (
 
 	capiaws "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiazure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	capigcp "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	capikubevirt "sigs.k8s.io/cluster-api-provider-kubevirt/api/v1alpha1"
 	capiopenstackv1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -72,6 +73,12 @@ func (c *CAPI) Reconcile(ctx context.Context) error {
 
 	if c.nodePool.Spec.Platform.Type == hyperv1.AWSPlatform {
 		if err := c.reconcileAWSMachines(ctx); err != nil {
+			return err
+		}
+	}
+
+	if c.nodePool.Spec.Platform.Type == hyperv1.GCPPlatform {
+		if err := c.reconcileGCPMachines(ctx); err != nil {
 			return err
 		}
 	}
@@ -756,6 +763,8 @@ func (c *CAPI) machineTemplateBuilders(ctx context.Context) (client.Object, erro
 		template, err = c.kubevirtMachineTemplate(templateNameGenerator)
 	case hyperv1.AzurePlatform:
 		template, err = c.azureMachineTemplate(templateNameGenerator)
+	case hyperv1.GCPPlatform:
+		template, err = c.gcpMachineTemplate(templateNameGenerator)
 	case hyperv1.PowerVSPlatform:
 		template, err = c.ibmPowerVSMachineTemplate(templateNameGenerator)
 	case hyperv1.OpenStackPlatform:
@@ -1137,6 +1146,11 @@ func (c *CAPI) listMachineTemplates() ([]client.Object, error) {
 		}
 	case hyperv1.AzurePlatform:
 		gvk, err = apiutil.GVKForObject(&capiazure.AzureMachineTemplate{}, api.Scheme)
+		if err != nil {
+			return nil, err
+		}
+	case hyperv1.GCPPlatform:
+		gvk, err = apiutil.GVKForObject(&capigcp.GCPMachineTemplate{}, api.Scheme)
 		if err != nil {
 			return nil, err
 		}

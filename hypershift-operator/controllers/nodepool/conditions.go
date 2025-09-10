@@ -148,6 +148,8 @@ func (r *NodePoolReconciler) setPlatformConditions(ctx context.Context, hcluster
 		return r.setKubevirtConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
 	case hyperv1.AWSPlatform:
 		return r.setAWSConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
+	case hyperv1.GCPPlatform:
+		return r.setGCPConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
 	case hyperv1.PowerVSPlatform:
 		return r.setPowerVSconditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
 	case hyperv1.OpenStackPlatform:
@@ -845,6 +847,13 @@ func (r NodePoolReconciler) validPlatformConfigCondition(ctx context.Context, no
 		if err != nil {
 			condition.Status = corev1.ConditionFalse
 			condition.Reason = hyperv1.AWSErrorReason
+			condition.Message = err.Error()
+		}
+	case hyperv1.GCPPlatform:
+		err := r.validateGCPPlatformConfig(ctx, nodePool, hc, oldCondition)
+		if err != nil {
+			condition.Status = corev1.ConditionFalse
+			condition.Reason = hyperv1.NodePoolValidationFailedReason
 			condition.Message = err.Error()
 		}
 	}

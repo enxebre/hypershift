@@ -35,6 +35,7 @@ import (
 
 	capiaws "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiazure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	capigcp "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	capiopenstackv1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -118,6 +119,7 @@ var (
 var capiRelatedNodePoolManagedResourcesToWatch = []client.Object{
 	&capiaws.AWSMachineTemplate{},
 	&capiazure.AzureMachineTemplate{},
+	&capigcp.GCPMachineTemplate{},
 	&agentv1.AgentMachineTemplate{},
 	&capiopenstackv1beta1.OpenStackMachineTemplate{},
 }
@@ -442,6 +444,10 @@ func isArchAndPlatformSupported(nodePool *hyperv1.NodePool) bool {
 			supported = true
 		}
 	case hyperv1.AzurePlatform:
+		if nodePool.Spec.Arch == hyperv1.ArchitectureAMD64 || nodePool.Spec.Arch == hyperv1.ArchitectureARM64 {
+			supported = true
+		}
+	case hyperv1.GCPPlatform:
 		if nodePool.Spec.Arch == hyperv1.ArchitectureAMD64 || nodePool.Spec.Arch == hyperv1.ArchitectureARM64 {
 			supported = true
 		}

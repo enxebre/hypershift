@@ -126,6 +126,10 @@ const (
 	// a HostedControlPlane.
 	ClusterAPIOpenStackProviderImage = "hypershift.openshift.io/capi-provider-openstack-image"
 
+	// ClusterAPIGCPProviderImage overrides the CAPI GCP provider image to use for
+	// a HostedControlPlane.
+	ClusterAPIGCPProviderImage = "hypershift.openshift.io/capi-provider-gcp-image"
+
 	// OpenStackResourceControllerImage overrides the ORC image to use for a HostedControlPlane.
 	OpenStackResourceControllerImage = "hypershift.openshift.io/orc-image"
 
@@ -1159,6 +1163,9 @@ const (
 
 	// OpenStackPlatform represents OpenStack infrastructure.
 	OpenStackPlatform PlatformType = "OpenStack"
+
+	// GCPPlatform represents Google Cloud Platform infrastructure.
+	GCPPlatform PlatformType = "GCP"
 )
 
 // List all PlatformType instances
@@ -1172,6 +1179,7 @@ func PlatformTypes() []PlatformType {
 		AzurePlatform,
 		PowerVSPlatform,
 		OpenStackPlatform,
+		GCPPlatform,
 	}
 }
 
@@ -1183,8 +1191,8 @@ type PlatformSpec struct {
 	// +unionDiscriminator
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf", message="Type is immutable"
 	// +immutable
-	// +openshift:validation:FeatureGateAwareEnum:featureGate="",enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None
-	// +openshift:validation:FeatureGateAwareEnum:featureGate=OpenStack,enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;OpenStack
+	// +openshift:validation:FeatureGateAwareEnum:featureGate="",enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;GCP
+	// +openshift:validation:FeatureGateAwareEnum:featureGate=OpenStack,enum=AWS;Azure;IBMCloud;KubeVirt;Agent;PowerVS;None;OpenStack;GCP
 	// +required
 	Type PlatformType `json:"type"`
 
@@ -1225,6 +1233,12 @@ type PlatformSpec struct {
 	// +optional
 	// +openshift:enable:FeatureGate=OpenStack
 	OpenStack *OpenStackPlatformSpec `json:"openstack,omitempty"`
+
+	// gcp specifies configuration for clusters running on Google Cloud Platform.
+	//
+	// +optional
+	// +immutable
+	GCP *GCPPlatformSpec `json:"gcp,omitempty"`
 }
 
 // IBMCloudPlatformSpec defines IBMCloud specific settings for components
@@ -1778,6 +1792,10 @@ type PlatformStatus struct {
 	// aws contains platform-specific status for AWS
 	// +optional
 	AWS *AWSPlatformStatus `json:"aws,omitempty"`
+
+	// gcp contains platform-specific status for GCP
+	// +optional
+	GCP *GCPPlatformStatus `json:"gcp,omitempty"`
 }
 
 // ClusterVersionStatus reports the status of the cluster versioning,
