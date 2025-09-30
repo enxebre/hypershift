@@ -4,9 +4,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	imageapi "github.com/openshift/api/image/v1"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
+	"github.com/openshift/hypershift/support/releaseinfo"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	capiazure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -14,9 +17,17 @@ import (
 )
 
 func TestAzureMachineTemplateSpec(t *testing.T) {
+	// Create a minimal release image for testing
+	mockReleaseImage := &releaseinfo.ReleaseImage{
+		ImageStream: &imageapi.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{Name: "4.15.0"},
+		},
+	}
+
 	testCases := []struct {
 		name                             string
 		nodePool                         *hyperv1.NodePool
+		releaseImage                     *releaseinfo.ReleaseImage
 		expectedAzureMachineTemplateSpec *capiazure.AzureMachineTemplateSpec
 		expectedErr                      bool
 		expectedErrMsg                   string
@@ -472,7 +483,7 @@ func TestAzureMachineTemplateSpec(t *testing.T) {
 				},
 			},
 			expectedErr:    true,
-			expectedErrMsg: "either ImageID or AzureMarketplace needs to be provided for the Azure machine",
+			expectedErrMsg: "failed to default Azure Marketplace image from release: Azure Marketplace image defaulting is only supported for OCP >= 4.20, current version is 4.15.0",
 		},
 		{
 			name: "error case since a bad subnetID was provided",
@@ -507,7 +518,12 @@ func TestAzureMachineTemplateSpec(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewGomegaWithT(t)
 
-			azureSpec, err := azureMachineTemplateSpec(tc.nodePool)
+			releaseImg := tc.releaseImage
+			if releaseImg == nil {
+				releaseImg = mockReleaseImage
+			}
+
+			azureSpec, err := azureMachineTemplateSpec(tc.nodePool, releaseImg)
 			if tc.expectedErr {
 				g.Expect(err.Error()).To(Equal(tc.expectedErrMsg))
 			} else {

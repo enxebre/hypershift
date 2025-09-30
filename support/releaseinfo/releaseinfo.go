@@ -72,12 +72,33 @@ type CoreOSImages struct {
 }
 
 type CoreRHCOSImage struct {
-	AzureDisk CoreAzureDisk `json:"azure-disk"`
+	AzureDisk        CoreAzureDisk        `json:"azure-disk"`
+	AzureMarketplace CoreAzureMarketplace `json:"marketplace"`
 }
 
 type CoreAzureDisk struct {
 	Release string `json:"release"`
 	URL     string `json:"url"`
+}
+
+type CoreAzureMarketplace struct {
+	Azure CoreAzureMarketplaceChannels `json:"azure"`
+}
+
+type CoreAzureMarketplaceChannels struct {
+	NoPurchasePlan CoreAzureMarketplacePlan `json:"no-purchase-plan"`
+}
+
+type CoreAzureMarketplacePlan struct {
+	HyperVGen1 *CoreAzureMarketplaceImage `json:"hyperVGen1,omitempty"`
+	HyperVGen2 *CoreAzureMarketplaceImage `json:"hyperVGen2,omitempty"`
+}
+
+type CoreAzureMarketplaceImage struct {
+	Publisher string `json:"publisher"`
+	Offer     string `json:"offer"`
+	SKU       string `json:"sku"`
+	Version   string `json:"version"`
 }
 
 type CoreOSAWSImages struct {

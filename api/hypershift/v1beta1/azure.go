@@ -17,6 +17,19 @@ const (
 	AzureMarketplace AzureVMImageType = "AzureMarketplace"
 )
 
+// AzureVMImageGeneration is used to specify the Hyper-V generation for Azure VMs.
+// Valid values are V1 and V2.
+// +kubebuilder:validation:Enum:=V1;V2
+type AzureVMImageGeneration string
+
+const (
+	// AzureVMImageGenerationV1 represents Hyper-V Generation 1 VMs.
+	AzureVMImageGenerationV1 AzureVMImageGeneration = "V1"
+
+	// AzureVMImageGenerationV2 represents Hyper-V Generation 2 VMs.
+	AzureVMImageGenerationV2 AzureVMImageGeneration = "V2"
+)
+
 // AzureNodePoolPlatform is the platform specific configuration for an Azure node pool.
 type AzureNodePoolPlatform struct {
 	// vmSize is the Azure VM instance type to use for the nodes being created in the nodepool.
@@ -44,6 +57,19 @@ type AzureNodePoolPlatform struct {
 	//
 	// +required
 	Image AzureVMImage `json:"image"`
+
+	// imageGeneration specifies the Hyper-V generation for the Azure VM image.
+	// Valid values are "V1" and "V2".
+	// This field is ONLY used when both Image.ImageID and Image.AzureMarketplace are nil,
+	// triggering automatic image defaulting from the release payload (OCP >= 4.20).
+	// When omitted during automatic defaulting, the controller defaults to "V2".
+	// When an explicit image is provided (either ImageID or AzureMarketplace), this field is ignored
+	// as the image source inherently determines the generation.
+	// It is the user's responsibility to ensure the chosen VM size supports the requested Hyper-V generation.
+	//
+	// +kubebuilder:validation:Enum=V1;V2
+	// +optional
+	ImageGeneration *AzureVMImageGeneration `json:"imageGeneration,omitempty"`
 
 	// osDisk provides configuration for the OS disk for the nodepool.
 	// This can be used to configure the size, storage account type, encryption options and whether the disk is persistent or ephemeral.
