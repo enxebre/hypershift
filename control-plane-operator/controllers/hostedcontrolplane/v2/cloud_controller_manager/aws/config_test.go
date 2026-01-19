@@ -17,30 +17,60 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-	hcp := newTestHCP(map[string]string{
-		hyperv1.SharedLoadBalancerHealthProbePathAnnotation: "/healthz",
-		hyperv1.SharedLoadBalancerHealthProbePortAnnotation: "10256",
+	t.Run("with_subnet", func(t *testing.T) {
+		hcp := newTestHCP(map[string]string{
+			hyperv1.SharedLoadBalancerHealthProbePathAnnotation: "/healthz",
+			hyperv1.SharedLoadBalancerHealthProbePortAnnotation: "10256",
+		})
+		hcp.Namespace = "HCP_NAMESPACE"
+
+		cm := &corev1.ConfigMap{}
+		_, _, err := assets.LoadManifestInto(ComponentName, "config.yaml", cm)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		cpContext := component.WorkloadContext{
+			HCP: hcp,
+		}
+		err = adaptConfig(cpContext, cm)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		yaml, err := util.SerializeResource(cm, api.Scheme)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		testutil.CompareWithFixture(t, yaml)
 	})
-	hcp.Namespace = "HCP_NAMESPACE"
 
-	cm := &corev1.ConfigMap{}
-	_, _, err := assets.LoadManifestInto(ComponentName, "config.yaml", cm)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	cpContext := component.WorkloadContext{
-		HCP: hcp,
-	}
-	err = adaptConfig(cpContext, cm)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	// Regression test for OCPBUGS-38358: ensure no panic when Subnet is nil
+	t.Run("with_nil_subnet", func(t *testing.T) {
+		hcp := newTestHCP(map[string]string{
+			hyperv1.SharedLoadBalancerHealthProbePathAnnotation: "/healthz",
+			hyperv1.SharedLoadBalancerHealthProbePortAnnotation: "10256",
+		})
+		hcp.Spec.Platform.AWS.CloudProviderConfig.Subnet = nil
 
-	yaml, err := util.SerializeResource(cm, api.Scheme)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	testutil.CompareWithFixture(t, yaml)
+		cm := &corev1.ConfigMap{}
+		_, _, err := assets.LoadManifestInto(ComponentName, "config.yaml", cm)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		cpContext := component.WorkloadContext{
+			HCP: hcp,
+		}
+		err = adaptConfig(cpContext, cm)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		yaml, err := util.SerializeResource(cm, api.Scheme)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		testutil.CompareWithFixture(t, yaml)
+	})
 }
 
 // newTestHCP creates a HostedControlPlane with default AWS configuration for testing.
