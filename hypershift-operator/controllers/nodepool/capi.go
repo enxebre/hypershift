@@ -470,6 +470,12 @@ func (c *CAPI) reconcileMachineDeployment(ctx context.Context, log logr.Logger,
 				machine.Labels[labelKey] = v
 			}
 
+			// Add interruptible-instance label for spot instances
+			if isSpotEnabled(nodePool) {
+				labelKey := fmt.Sprintf("%s.%s", labelManagedPrefix, "machine.openshift.io/interruptible-instance")
+				machine.Labels[labelKey] = ""
+			}
+
 			// Propagate taints.
 			taintsInJSON, err := taintsToJSON(nodePool.Spec.Taints)
 			if err != nil {
@@ -880,6 +886,12 @@ func (c *CAPI) reconcileMachineSet(ctx context.Context,
 		// so the CPO HCCO Node controller can recognize them and apply them to Nodes.
 		labelKey := fmt.Sprintf("%s.%s", labelManagedPrefix, k)
 		machineSet.Spec.Template.Labels[labelKey] = v
+	}
+
+	// Add interruptible-instance label for spot instances
+	if isSpotEnabled(nodePool) {
+		labelKey := fmt.Sprintf("%s.%s", labelManagedPrefix, "machine.openshift.io/interruptible-instance")
+		machineSet.Spec.Template.Labels[labelKey] = ""
 	}
 
 	// Propagate taints.

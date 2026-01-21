@@ -25,12 +25,27 @@ const (
 	// infraLifecycleOwned is the value we use when tagging infra resources to indicate
 	// that the resource is considered owned and managed by the cluster.
 	infraLifecycleOwned = "owned"
+
+	// AnnotationEnableSpot enables spot instance creation for this NodePool.
+	// When set to "true", the NodePool will create spot instances instead of on-demand instances.
+	AnnotationEnableSpot = "hypershift.openshift.io/enable-spot"
 )
 
 // awsClusterCloudProviderTagKey generates the key for infra resources associated to a cluster.
 // https://github.com/kubernetes/cloud-provider-aws/blob/5f394ba297bf280ceb3edfc38922630b4bd83f46/pkg/providers/v2/tags.go#L31-L37
 func awsClusterCloudProviderTagKey(id string) string {
 	return fmt.Sprintf("kubernetes.io/cluster/%s", id)
+}
+
+// isSpotEnabled determines if spot instances should be enabled for this NodePool.
+// For initial implementation, this is controlled via annotation.
+// TODO: Replace with API-based configuration once API design is finalized.
+func isSpotEnabled(nodePool *hyperv1.NodePool) bool {
+	if nodePool.Annotations == nil {
+		return false
+	}
+	val, ok := nodePool.Annotations[AnnotationEnableSpot]
+	return ok && val == "true"
 }
 
 func awsMachineTemplateSpec(infraName string, hostedCluster *hyperv1.HostedCluster, nodePool *hyperv1.NodePool, defaultSG bool, releaseImage *releaseinfo.ReleaseImage) (*capiaws.AWSMachineTemplateSpec, error) {
@@ -172,6 +187,14 @@ func awsMachineTemplateSpec(infraName string, hostedCluster *hyperv1.HostedClust
 		}
 	}
 
+	// Configure spot instances if enabled via annotation
+	if isSpotEnabled(nodePool) {
+		awsMachineTemplateSpec.Template.Spec.SpotMarketOptions = &capiaws.SpotMarketOptions{
+			// MaxPrice nil means use on-demand price as the maximum
+			MaxPrice: nil,
+		}
+	}
+
 	if hostedCluster.Annotations[hyperv1.AWSMachinePublicIPs] == "true" {
 		awsMachineTemplateSpec.Template.Spec.PublicIP = ptr.To(true)
 	}
@@ -191,6 +214,12 @@ func awsAdditionalTags(nodePool *hyperv1.NodePool, hostedCluster *hyperv1.Hosted
 	if _, ok := tags[key]; !ok {
 		tags[key] = infraLifecycleOwned
 	}
+
+	// Add termination handler tag for spot instances
+	if isSpotEnabled(nodePool) {
+		tags["aws-node-termination-handler/managed"] = ""
+	}
+
 	return tags
 }
 
