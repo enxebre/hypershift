@@ -2,7 +2,6 @@ package awsnodeterminationhandler
 
 import (
 	component "github.com/openshift/hypershift/support/controlplane-component"
-	"github.com/openshift/hypershift/support/infra"
 
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -14,8 +13,7 @@ func adaptMachineHealthCheck(cpContext component.WorkloadContext, mhc *capiv1.Ma
 	mhc.Namespace = hcp.Namespace
 
 	// Set the cluster name to the infrastructure ID
-	infraStatus := cpContext.InfraStatus
-	mhc.Spec.ClusterName = infraStatus.InfraID()
+	mhc.Spec.ClusterName = hcp.Spec.InfraID
 
 	// The selector is already set in the YAML to match interruptible-instance label
 	// No need to modify it here, but we can validate it exists

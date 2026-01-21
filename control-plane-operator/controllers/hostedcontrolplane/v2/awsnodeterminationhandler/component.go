@@ -6,6 +6,7 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,7 +81,7 @@ func predicate(cpContext component.WorkloadContext) (bool, error) {
 	}
 
 	// Verify service-network-admin-kubeconfig exists
-	kubeconfigSecret := &client.Object{}
+	kubeconfigSecret := &corev1.Secret{}
 	if err := cpContext.Client.Get(cpContext, client.ObjectKey{
 		Namespace: hcp.Namespace,
 		Name:      "service-network-admin-kubeconfig",
