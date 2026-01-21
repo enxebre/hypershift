@@ -47,6 +47,7 @@ import (
 	fgv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/fg"
 	ignitionserverv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/ignitionserver"
 	ignitionproxyv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/ignitionserver_proxy"
+	awsnodeterminationhandlerv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/awsnodeterminationhandler"
 	ingressoperatorv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/ingressoperator"
 	kasv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kas"
 	kcmv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/kcm"
@@ -255,6 +256,7 @@ func (r *HostedControlPlaneReconciler) registerComponents(hcp *hyperv1.HostedCon
 		ntov2.NewComponent(),
 		dnsoperatorv2.NewComponent(),
 		machineapproverv2.NewComponent(),
+		awsnodeterminationhandlerv2.NewComponent(),
 		ingressoperatorv2.NewComponent(),
 		snapshotcontrollerv2.NewComponent(),
 		registryoperatorv2.NewComponent(),

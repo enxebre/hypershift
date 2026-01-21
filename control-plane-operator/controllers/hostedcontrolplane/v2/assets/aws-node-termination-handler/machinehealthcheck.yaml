@@ -1,0 +1,18 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: spot-instance-health-check
+spec:
+  clusterName: ""
+  selector:
+    matchLabels:
+      machine.openshift.io/interruptible-instance: ""
+  unhealthyConditions:
+  - type: "Ready"
+    status: "False"
+    timeout: "300s"
+  - type: "Ready"
+    status: "Unknown"
+    timeout: "300s"
+  maxUnhealthy: "100%"
+  nodeStartupTimeout: "10m"
