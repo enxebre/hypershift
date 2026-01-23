@@ -24,12 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const (
-	routerConfigKey   = "haproxy.cfg"
-	KASSVCLBPort      = 6443
-	ExternalDNSLBPort = 443
-)
-
 //go:embed router_config.template
 var routerConfigTemplateStr string
 var routerConfigTemplate *template.Template
