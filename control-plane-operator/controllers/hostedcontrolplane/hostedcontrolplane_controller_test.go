@@ -396,11 +396,8 @@ func TestReconcileOAuthService(t *testing.T) {
 	oauthExternalPublicRoute := func(m ...func(*routev1.Route)) routev1.Route {
 		route := routev1.Route{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: targetNamespace,
-				Name:      "oauth",
-				Labels: map[string]string{
-					"hypershift.openshift.io/hosted-control-plane": targetNamespace,
-				},
+				Namespace:       targetNamespace,
+				Name:            "oauth",
 				OwnerReferences: []metav1.OwnerReference{ownerRef},
 			},
 			Spec: routev1.RouteSpec{
@@ -2274,7 +2271,7 @@ func TestUseHCPRouter(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name: "Provider is AWS, Public and Private",
+			name: "Provider is AWS, Public and Private, KAS Loadbalancer",
 			hcp: &hyperv1.HostedControlPlane{
 				TypeMeta: metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{
@@ -2286,6 +2283,44 @@ func TestUseHCPRouter(t *testing.T) {
 						Type: hyperv1.AWSPlatform,
 						AWS: &hyperv1.AWSPlatformSpec{
 							EndpointAccess: hyperv1.PublicAndPrivate,
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.LoadBalancer,
+							},
+						},
+					},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Provider is AWS, Public and Private, KAS Route",
+			hcp: &hyperv1.HostedControlPlane{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "tenant1",
+					Name:      "cluster1",
+				},
+				Spec: hyperv1.HostedControlPlaneSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AWSPlatform,
+						AWS: &hyperv1.AWSPlatformSpec{
+							EndpointAccess: hyperv1.PublicAndPrivate,
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.Route,
+								Route: &hyperv1.RoutePublishingStrategy{
+									Hostname: "cluster1.api.tenant1.com",
+								},
+							},
 						},
 					},
 				},
@@ -2331,7 +2366,7 @@ func TestUseHCPRouter(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name: "Provider is GCP, PublicAndPrivate",
+			name: "Provider is GCP, PublicAndPrivate, KAS Route",
 			hcp: &hyperv1.HostedControlPlane{
 				TypeMeta: metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{
@@ -2343,6 +2378,17 @@ func TestUseHCPRouter(t *testing.T) {
 						Type: hyperv1.GCPPlatform,
 						GCP: &hyperv1.GCPPlatformSpec{
 							EndpointAccess: hyperv1.GCPEndpointAccessPublicAndPrivate,
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.Route,
+								Route: &hyperv1.RoutePublishingStrategy{
+									Hostname: "cluster1.api.tenant1.com",
+								},
+							},
 						},
 					},
 				},

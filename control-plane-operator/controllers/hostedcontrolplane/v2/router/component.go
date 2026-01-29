@@ -47,12 +47,9 @@ func NewComponent() component.ControlPlaneComponent {
 		Build()
 }
 
-// useHCPRouter returns true if a dedicated common router is created for a HCP to handle ingress for the managed endpoints.
-// This is true when the API input specifies intent for the following:
-// 1 - AWS endpointAccess is private somehow (i.e. publicAndPrivate or private) or is public and configured with external DNS.
-// 2 - When 1 is true, we recommend (and automate via CLI) ServicePublishingStrategy to be "Route" for all endpoints but the KAS
-// which needs a dedicated Service type LB external to be exposed if no external DNS is supported.
-// Otherwise, the Routes use the management cluster Domain and resolve through the default ingress controller.
+// useHCPRouter returns true when the HCP routes should be served by a dedicated
+// HCP router, as determined by util.LabelHCPRoutes (private-only or public with
+// dedicated KAS DNS), excluding shared ingress and IBM Cloud.
 func useHCPRouter(cpContext component.WorkloadContext) (bool, error) {
 	if sharedingress.UseSharedIngress() {
 		return false, nil
@@ -60,5 +57,5 @@ func useHCPRouter(cpContext component.WorkloadContext) (bool, error) {
 	if cpContext.HCP.Spec.Platform.Type == hyperv1.IBMCloudPlatform {
 		return false, nil
 	}
-	return util.IsPrivateHCP(cpContext.HCP) || util.IsPublicWithDNS(cpContext.HCP), nil
+	return util.LabelHCPRoutes(cpContext.HCP), nil
 }

@@ -55,16 +55,19 @@ func IsPublicHC(hc *hyperv1.HostedCluster) bool {
 	return true
 }
 
-func IsPublicWithDNS(hcp *hyperv1.HostedControlPlane) bool {
-	return IsPublicHCP(hcp) && (UseDedicatedDNS(hcp, hyperv1.APIServer) ||
-		UseDedicatedDNS(hcp, hyperv1.OAuthServer) ||
-		UseDedicatedDNS(hcp, hyperv1.Konnectivity) ||
-		UseDedicatedDNS(hcp, hyperv1.Ignition))
-}
-
-func IsPublicWithDNSByHC(hc *hyperv1.HostedCluster) bool {
-	return IsPublicHC(hc) && (UseDedicatedDNSByHC(hc, hyperv1.APIServer) ||
-		UseDedicatedDNSByHC(hc, hyperv1.OAuthServer) ||
-		UseDedicatedDNSByHC(hc, hyperv1.Konnectivity) ||
-		UseDedicatedDNSByHC(hc, hyperv1.Ignition))
+// LabelHCPRoutes determines if routes should be labeled for admission by the HCP router.
+// Returns true when routes should use the HCP router infrastructure instead of the
+// management cluster router.
+//
+// This returns true when:
+// 1. Cluster has no public access (Private-only), OR
+// 2. Cluster is Public with dedicated DNS for KAS (KAS uses Route with explicit hostname)
+//
+// For PublicAndPrivate clusters using LoadBalancer for KAS, external routes should use
+// the management cluster router instead of requiring a dedicated public HCP router.
+//
+// The key insight: HCP router infrastructure availability is determined by KAS publishing
+// strategy, not by individual service DNS configurations.
+func LabelHCPRoutes(hcp *hyperv1.HostedControlPlane) bool {
+	return !IsPublicHCP(hcp) || UseDedicatedDNSForKAS(hcp)
 }
