@@ -1,0 +1,41 @@
+# Router Infrastructure Summary
+# This file shows the decisions made for this ServicePublishingStrategy configuration
+#
+# Test Case: When AWS is Public with KAS LoadBalancer
+#
+
+input:
+  platform: AWS
+  isPrivateHCP: false
+  isPublicHCP: true
+  servicePublishingStrategies:
+    - service: APIServer
+      type: LoadBalancer
+    - service: OAuthServer
+      type: Route
+      hostname: oauth.example.com
+    - service: Konnectivity
+      type: Route
+      hostname: konnectivity.example.com
+    - service: Ignition
+      type: Route
+      hostname: ignition.example.com
+
+decisions:
+  labelHCPRoutes: false
+  # LabelHCPRoutes determines if routes should be labeled for the HCP router.
+  # True when: Private-only OR (Public with dedicated DNS for KAS via Route)
+
+createdResources:
+  services:
+    # No router services created
+  routes:
+    - name: ignition-server
+      host: ignition.example.com
+      labeledForHCPRouter: false
+    - name: konnectivity-server
+      host: konnectivity.example.com
+      labeledForHCPRouter: false
+    - name: oauth
+      host: oauth.example.com
+      labeledForHCPRouter: false
