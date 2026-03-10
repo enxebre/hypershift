@@ -310,6 +310,11 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 		}
 	}
 
+	// Aggregate node version and health information into NodesInfo status.
+	if err := r.setNodesInfoStatus(ctx, nodePool); err != nil {
+		log.Error(err, "Failed to set NodesInfo status")
+	}
+
 	// Additional short circuiting validations:
 	// TODO(alberto): capture these in conditions.
 	// Consider having a condition "Degraded" with buckets for error types, e.g. INTERNAL_ERR, INFRA_ERR...
