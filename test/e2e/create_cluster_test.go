@@ -1963,20 +1963,22 @@ func TestOnCreateAPIUX(t *testing.T) {
 						expectedErrorSubstring: "",
 					},
 					{
-						name: "When spot market type is set without spot options it should fail",
+						name: "When spot market type is set without spot options it should pass",
 						mutateInput: func(np *hyperv1.NodePool) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
 							}
 						},
-						expectedErrorSubstring: "spot options must be specified when marketType is 'Spot'",
+						expectedErrorSubstring: "",
 					},
 					{
 						name: "When spot options are set without spot market type it should fail",
 						mutateInput: func(np *hyperv1.NodePool) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeOnDemand,
-								Spot:       &hyperv1.SpotOptions{},
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
+								},
 							}
 						},
 						expectedErrorSubstring: "spot options can only be specified when marketType is 'Spot'",
@@ -1987,7 +1989,9 @@ func TestOnCreateAPIUX(t *testing.T) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
 								Tenancy:    "default",
-								Spot:       &hyperv1.SpotOptions{},
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
+								},
 							}
 						},
 						expectedErrorSubstring: "",
@@ -1998,7 +2002,9 @@ func TestOnCreateAPIUX(t *testing.T) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
 								Tenancy:    "dedicated",
-								Spot:       &hyperv1.SpotOptions{},
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
+								},
 							}
 						},
 						expectedErrorSubstring: "Spot instances require tenancy 'default' or unset",
@@ -2009,7 +2015,9 @@ func TestOnCreateAPIUX(t *testing.T) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
 								Tenancy:    "host",
-								Spot:       &hyperv1.SpotOptions{},
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
+								},
 							}
 						},
 						expectedErrorSubstring: "Spot instances require tenancy 'default' or unset",
@@ -2019,7 +2027,9 @@ func TestOnCreateAPIUX(t *testing.T) {
 						mutateInput: func(np *hyperv1.NodePool) {
 							np.Spec.Platform.AWS.Placement = &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
-								Spot:       &hyperv1.SpotOptions{},
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
+								},
 								CapacityReservation: &hyperv1.CapacityReservationOptions{
 									ID: ptr.To("cr-1234567890abcdef0"),
 								},

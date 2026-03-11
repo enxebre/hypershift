@@ -184,12 +184,11 @@ func awsMachineTemplateSpec(infraName string, hostedCluster *hyperv1.HostedClust
 		switch placement.MarketType {
 		case hyperv1.MarketTypeSpot:
 			// Spot instances
-			if placement.Spot != nil {
-				awsMachineTemplateSpec.Template.Spec.SpotMarketOptions = &capiaws.SpotMarketOptions{}
-				if placement.Spot.MaxPrice != nil {
-					awsMachineTemplateSpec.Template.Spec.SpotMarketOptions.MaxPrice = placement.Spot.MaxPrice
-				}
+			awsMachineTemplateSpec.Template.Spec.SpotMarketOptions = &capiaws.SpotMarketOptions{}
+			if placement.Spot.MaxPrice != "" {
+				awsMachineTemplateSpec.Template.Spec.SpotMarketOptions.MaxPrice = ptr.To(placement.Spot.MaxPrice)
 			}
+
 		case hyperv1.MarketTypeCapacityBlock:
 			awsMachineTemplateSpec.Template.Spec.MarketType = capiaws.MarketTypeCapacityBlock
 		case hyperv1.MarketTypeOnDemand:

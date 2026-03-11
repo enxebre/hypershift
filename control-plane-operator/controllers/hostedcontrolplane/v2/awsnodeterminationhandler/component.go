@@ -57,8 +57,8 @@ func getTerminationHandlerQueueURL(hcp *hyperv1.HostedControlPlane) string {
 	if hcp == nil {
 		return ""
 	}
-	if hcp.Spec.Platform.AWS != nil && hcp.Spec.Platform.AWS.TerminationHandlerQueueURL != nil {
-		return *hcp.Spec.Platform.AWS.TerminationHandlerQueueURL
+	if hcp.Spec.Platform.AWS != nil {
+		return hcp.Spec.Platform.AWS.TerminationHandlerQueueURL
 	}
 	return ""
 }

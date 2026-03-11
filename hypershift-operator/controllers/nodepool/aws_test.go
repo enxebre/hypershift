@@ -218,7 +218,7 @@ func TestAWSMachineTemplateSpec(t *testing.T) {
 					AMI: amiName,
 					Placement: &hyperv1.PlacementOptions{
 						MarketType: hyperv1.MarketTypeSpot,
-						Spot:       &hyperv1.SpotOptions{},
+						Spot:       hyperv1.SpotOptions{},
 					},
 				}},
 			},
@@ -234,8 +234,8 @@ func TestAWSMachineTemplateSpec(t *testing.T) {
 					AMI: amiName,
 					Placement: &hyperv1.PlacementOptions{
 						MarketType: hyperv1.MarketTypeSpot,
-						Spot: &hyperv1.SpotOptions{
-							MaxPrice: ptr.To("0.50"),
+						Spot: hyperv1.SpotOptions{
+							MaxPrice: "0.50",
 						},
 					},
 				}},
@@ -929,7 +929,7 @@ func TestIsSpotEnabled(t *testing.T) {
 						AWS: &hyperv1.AWSNodePoolPlatform{
 							Placement: &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
-								Spot:       &hyperv1.SpotOptions{},
+								Spot:       hyperv1.SpotOptions{},
 							},
 						},
 					},
@@ -945,8 +945,8 @@ func TestIsSpotEnabled(t *testing.T) {
 						AWS: &hyperv1.AWSNodePoolPlatform{
 							Placement: &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
-								Spot: &hyperv1.SpotOptions{
-									MaxPrice: ptr.To("0.50"),
+								Spot: hyperv1.SpotOptions{
+									MaxPrice: "0.50",
 								},
 							},
 						},
@@ -968,7 +968,7 @@ func TestIsSpotEnabled(t *testing.T) {
 						AWS: &hyperv1.AWSNodePoolPlatform{
 							Placement: &hyperv1.PlacementOptions{
 								MarketType: hyperv1.MarketTypeSpot,
-								Spot:       &hyperv1.SpotOptions{},
+								Spot:       hyperv1.SpotOptions{},
 							},
 						},
 					},
