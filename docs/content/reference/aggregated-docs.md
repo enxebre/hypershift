@@ -41087,19 +41087,19 @@ MarketType
 </td>
 <td>
 <em>(Optional)</em>
-<p>marketType specifies the EC2 instance purchasing model.</p>
-<p>Possible values:
-- &ldquo;OnDemand&rdquo;: Standard on-demand instances (default if unset)
-- &ldquo;Spot&rdquo;: Spot instances using spare EC2 capacity at reduced prices but may be interrupted.
-Requires spot options and terminationHandlerQueueURL on the HostedCluster.
-- &ldquo;CapacityBlocks&rdquo;: Scheduled pre-purchased compute capacity. Recommended for GPU/ML workloads.
-Requires capacityReservation with a specific reservation ID.</p>
-<p>When omitted, the backend will use &ldquo;OnDemand&rdquo; as the default.</p>
+<p>marketType specifies the EC2 instance purchasing model.
+Supported values are &ldquo;OnDemand&rdquo; for standard on-demand instances,
+&ldquo;Spot&rdquo; for spot instances that use spare EC2 capacity at reduced prices
+but may be interrupted (requires spot options and terminationHandlerQueueURL
+on the HostedCluster), and &ldquo;CapacityBlocks&rdquo; for scheduled pre-purchased
+compute capacity recommended for GPU/ML workloads (requires
+capacityReservation with a specific reservation ID).
+When omitted, the default is &ldquo;OnDemand&rdquo;.</p>
 </td>
 </tr>
 <tr>
 <td>
-<code>spot</code></br>
+<code>spot,omitzero</code></br>
 <em>
 <a href="#hypershift.openshift.io/v1beta1.SpotOptions">
 SpotOptions

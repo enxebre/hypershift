@@ -79,7 +79,7 @@ type AWSNodePoolPlatform struct {
 //
 // +kubebuilder:validation:XValidation:rule="has(self.tenancy) && self.tenancy == 'host' ? !has(self.capacityReservation) : true", message="AWS Capacity Reservations cannot be used with Dedicated Hosts (tenancy 'host')"
 // +kubebuilder:validation:XValidation:rule="!has(self.marketType) || self.marketType != 'Spot' || !has(self.capacityReservation)", message="Spot instances cannot be combined with Capacity Reservations"
-// +kubebuilder:validation:XValidation:rule="!has(self.marketType) || self.marketType != 'Spot' || !has(self.tenancy) || self.tenancy == '' || self.tenancy == 'default'", message="Spot instances require tenancy 'default' or unset"
+// +kubebuilder:validation:XValidation:rule="!has(self.marketType) || self.marketType != 'Spot' || !has(self.tenancy) || self.tenancy == ” || self.tenancy == 'default'", message="Spot instances require tenancy 'default' or unset"
 // +kubebuilder:validation:XValidation:rule="!has(self.marketType) || self.marketType != 'CapacityBlocks' || has(self.capacityReservation)", message="CapacityBlocks market type requires capacityReservation to be specified"
 // +kubebuilder:validation:XValidation:rule="!has(self.spot) || (has(self.marketType) && self.marketType == 'Spot')", message="spot options can only be specified when marketType is 'Spot'"
 // +kubebuilder:validation:XValidation:rule="has(self.marketType) && self.marketType == 'Spot' ? has(self.spot) : true", message="spot options must be specified when marketType is 'Spot'"
@@ -99,17 +99,15 @@ type PlacementOptions struct {
 	Tenancy string `json:"tenancy,omitempty"`
 
 	// marketType specifies the EC2 instance purchasing model.
-	//
-	// Possible values:
-	// - "OnDemand": Standard on-demand instances (default if unset)
-	// - "Spot": Spot instances using spare EC2 capacity at reduced prices but may be interrupted.
-	//           Requires spot options and terminationHandlerQueueURL on the HostedCluster.
-	// - "CapacityBlocks": Scheduled pre-purchased compute capacity. Recommended for GPU/ML workloads.
-	//                     Requires capacityReservation with a specific reservation ID.
-	//
-	// When omitted, the backend will use "OnDemand" as the default.
+	// Supported values are "OnDemand" for standard on-demand instances,
+	// "Spot" for spot instances that use spare EC2 capacity at reduced prices
+	// but may be interrupted (requires spot options and terminationHandlerQueueURL
+	// on the HostedCluster), and "CapacityBlocks" for scheduled pre-purchased
+	// compute capacity recommended for GPU/ML workloads (requires
+	// capacityReservation with a specific reservation ID).
+	// When omitted, the default is "OnDemand".
 	// +optional
-	// +kubebuilder:validation:Enum:=OnDemand;Spot;CapacityBlocks
+	// +kubebuilder:validation:Enum:="";OnDemand;Spot;CapacityBlocks
 	MarketType MarketType `json:"marketType,omitempty"`
 
 	// spot configures Spot instance options.
@@ -120,7 +118,7 @@ type PlacementOptions struct {
 	// HostedCluster's AWS platform spec for graceful handling of interruptions.
 	//
 	// +optional
-	Spot *SpotOptions `json:"spot,omitempty"`
+	Spot SpotOptions `json:"spot,omitzero"`
 
 	// capacityReservation specifies Capacity Reservation options for the NodePool instances.
 	//
@@ -149,8 +147,9 @@ type SpotOptions struct {
 	//
 	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?$`
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=20
-	MaxPrice *string `json:"maxPrice,omitempty"`
+	MaxPrice string `json:"maxPrice,omitempty"`
 }
 
 // MarketType describes the market type for EC2 instances.
@@ -429,9 +428,12 @@ type AWSPlatformSpec struct {
 	// Supports both standard and FIFO queues (FIFO queues end with .fifo suffix).
 	//
 	// +optional
-	// +kubebuilder:validation:Pattern=`^https://sqs\.[a-z0-9-]+\.amazonaws\.com/[0-9]{12}/[a-zA-Z0-9_-]+(\.fifo)?$`
 	// +kubebuilder:validation:MaxLength=512
-	TerminationHandlerQueueURL *string `json:"terminationHandlerQueueURL,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule=`isURL(self) && url(self).getScheme() == 'https'`,message="terminationHandlerQueueURL must be a valid HTTPS URL"
+	// +kubebuilder:validation:XValidation:rule=`isURL(self) && url(self).getHost().matches('^sqs\\.[a-z0-9-]+\\.amazonaws\\.com$')`,message="terminationHandlerQueueURL must have an SQS host (sqs.<region>.amazonaws.com)"
+	// +kubebuilder:validation:XValidation:rule=`isURL(self) && url(self).getEscapedPath().matches('^/[0-9]{12}/[a-zA-Z0-9_-]+(\\.fifo)?$')`,message="terminationHandlerQueueURL must have a valid SQS path (/<account-id>/<queue-name>)"
+	TerminationHandlerQueueURL string `json:"terminationHandlerQueueURL,omitempty"`
 }
 
 // AWSSharedVPC contains fields needed to create a HostedCluster using a VPC that has been

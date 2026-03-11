@@ -4907,8 +4907,18 @@ spec:
 
                           Supports both standard and FIFO queues (FIFO queues end with .fifo suffix).
                         maxLength: 512
-                        pattern: ^https://sqs\.[a-z0-9-]+\.amazonaws\.com/[0-9]{12}/[a-zA-Z0-9_-]+(\.fifo)?$
+                        minLength: 1
                         type: string
+                        x-kubernetes-validations:
+                        - message: terminationHandlerQueueURL must be a valid HTTPS
+                            URL
+                          rule: isURL(self) && url(self).getScheme() == 'https'
+                        - message: terminationHandlerQueueURL must have an SQS host
+                            (sqs.<region>.amazonaws.com)
+                          rule: isURL(self) && url(self).getHost().matches('^sqs\\.[a-z0-9-]+\\.amazonaws\\.com$')
+                        - message: terminationHandlerQueueURL must have a valid SQS
+                            path (/<account-id>/<queue-name>)
+                          rule: isURL(self) && url(self).getEscapedPath().matches('^/[0-9]{12}/[a-zA-Z0-9_-]+(\\.fifo)?$')
                     required:
                     - region
                     - rolesRef
