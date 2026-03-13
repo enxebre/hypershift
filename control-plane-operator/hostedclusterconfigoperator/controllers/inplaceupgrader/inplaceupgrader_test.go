@@ -123,7 +123,7 @@ func TestGetNodesForMachineSet(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithObjects(machineSet).WithObjects(machines...).Build()
 	hostedClusterClient := fake.NewClientBuilder().WithObjects(wantedNodes...).WithObjects(unwantedNodes...).Build()
-	gotNodes, err := getNodesForMachineSet(t.Context(), c, hostedClusterClient, machineSet)
+	gotNodes, _, err := getNodesForMachineSet(t.Context(), c, hostedClusterClient, machineSet)
 
 	g := NewWithT(t)
 	g.Expect(err).ToNot(HaveOccurred())

@@ -371,6 +371,7 @@ func (t *Token) reconcileUserDataSecret(log logr.Logger, userDataSecret *corev1.
 		userDataSecret.Annotations = make(map[string]string)
 	}
 	userDataSecret.Annotations[nodePoolAnnotation] = client.ObjectKeyFromObject(t.nodePool).String()
+	userDataSecret.Annotations[hyperv1.NodePoolReleaseVersionAnnotation] = t.releaseImage.Version()
 	if userDataSecret.Labels == nil {
 		userDataSecret.Labels = make(map[string]string)
 	}
