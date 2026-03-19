@@ -2780,7 +2780,7 @@ The HostedCluster deployment will continue, at this point the SDN is running.
 ## Cilium
 ### Deployment
 
-In this scenario we are using the Cilium version v1.14.5 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
+In this scenario we are using the Cilium version v1.15.1 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
 
 1. Create a `HostedCluster` and set its `HostedCluster.spec.networking.networkType` to `Other`.
 
@@ -2804,7 +2804,7 @@ In this scenario we are using the Cilium version v1.14.5 which is the last one a
     ~~~sh
     #!/bin/bash
 
-    version="1.14.5"
+    version="1.15.1"
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-03-cilium-ciliumconfigs-crd.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00000-cilium-namespace.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00001-cilium-olm-serviceaccount.yaml
@@ -3059,7 +3059,7 @@ In order for Cilium connectivity test pods to run on OpenShift, a simple custom 
   ~~~
 
   ~~~sh
-  version="1.14.5"
+  version="1.15.1"
   oc apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/${version}/examples/kubernetes/connectivity-check/connectivity-check.yaml
   ~~~
 
@@ -6798,7 +6798,7 @@ The HostedCluster deployment will continue, at this point the SDN is running.
 ## Cilium
 ### Deployment
 
-In this scenario we are using the Cilium version v1.14.5 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
+In this scenario we are using the Cilium version v1.15.1 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
 
 1. Create a `HostedCluster` and set its `HostedCluster.spec.networking.networkType` to `Other`.
 
@@ -6822,7 +6822,7 @@ In this scenario we are using the Cilium version v1.14.5 which is the last one a
     ~~~sh
     #!/bin/bash
 
-    version="1.14.5"
+    version="1.15.1"
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-03-cilium-ciliumconfigs-crd.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00000-cilium-namespace.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00001-cilium-olm-serviceaccount.yaml
@@ -7077,7 +7077,7 @@ In order for Cilium connectivity test pods to run on OpenShift, a simple custom 
   ~~~
 
   ~~~sh
-  version="1.14.5"
+  version="1.15.1"
   oc apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/${version}/examples/kubernetes/connectivity-check/connectivity-check.yaml
   ~~~
 
@@ -13957,6 +13957,7 @@ By default, the backup includes the following resources. The exact set of resour
 
 **Additional Resources (always included):**
 - Routes (`routes.route.openshift.io`), ClusterDeployments (`clusterdeployments.hive.openshift.io`)
+- NMStateConfig (`nmstateconfigs.agent-install.openshift.io`)
 
 **Platform-Specific Resources (automatically detected):**
 
@@ -14026,6 +14027,7 @@ The following table lists all available resource types for the `--included-resou
 | | `machines.cluster.x-k8s.io` | Machine resources |
 | **OpenShift** | `routes.route.openshift.io` | OpenShift Routes |
 | | `clusterdeployments.hive.openshift.io` | ClusterDeployment resources |
+| | `nmstateconfigs.agent-install.openshift.io` | NMStateConfig resources |
 
 > **Platform Detection**: When using default resources (no `--included-resources` flag), only the platform-specific resources matching your HostedCluster's platform will be included automatically.
 
@@ -21846,7 +21848,7 @@ The HostedCluster deployment will continue, at this point the SDN is running.
 ## Cilium
 ### Deployment
 
-In this scenario we are using the Cilium version v1.14.5 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
+In this scenario we are using the Cilium version v1.15.1 which is the last one at the time of this writing. The steps followed rely on the docs by Cilium project to deploy Cilium on OpenShift.
 
 1. Create a `HostedCluster` and set its `HostedCluster.spec.networking.networkType` to `Other`.
 
@@ -21870,7 +21872,7 @@ In this scenario we are using the Cilium version v1.14.5 which is the last one a
     ~~~sh
     #!/bin/bash
 
-    version="1.14.5"
+    version="1.15.1"
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-03-cilium-ciliumconfigs-crd.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00000-cilium-namespace.yaml
     oc apply -f https://raw.githubusercontent.com/isovalent/olm-for-cilium/main/manifests/cilium.v${version}/cluster-network-06-cilium-00001-cilium-olm-serviceaccount.yaml
@@ -22125,7 +22127,7 @@ In order for Cilium connectivity test pods to run on OpenShift, a simple custom 
   ~~~
 
   ~~~sh
-  version="1.14.5"
+  version="1.15.1"
   oc apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/${version}/examples/kubernetes/connectivity-check/connectivity-check.yaml
   ~~~
 
@@ -29018,6 +29020,81 @@ GCPPrivateServiceConnectStatus
 </tr>
 </tbody>
 </table>
+##HCPEtcdBackup { #hypershift.openshift.io/v1beta1.HCPEtcdBackup }
+<p>
+<p>HCPEtcdBackup represents a request to back up etcd for a hosted control plane.
+This resource is feature-gated behind the HCPEtcdBackup feature gate.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+hypershift.openshift.io/v1beta1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>HCPEtcdBackup</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>metadata is the metadata for the HCPEtcdBackup.</p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupSpec">
+HCPEtcdBackupSpec
+</a>
+</em>
+</td>
+<td>
+<p>spec is the specification for the HCPEtcdBackup.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>status,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStatus">
+HCPEtcdBackupStatus
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>status is the status of the HCPEtcdBackup.</p>
+</td>
+</tr>
+</tbody>
+</table>
 ##HostedCluster { #hypershift.openshift.io/v1beta1.HostedCluster }
 <p>
 <p>HostedCluster is the primary representation of a HyperShift cluster and encapsulates
@@ -30648,6 +30725,25 @@ AWSSharedVPC
 <p>sharedVPC contains fields that must be specified if the HostedCluster must use a VPC that is
 created in a different AWS account and is shared with the AWS account where the HostedCluster
 will be created.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>terminationHandlerQueueURL</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>terminationHandlerQueueURL specifies the SQS queue URL for EC2 spot interruption events.
+This is required when using spot instances (marketType: Spot) in NodePools to enable
+graceful handling of spot instance terminations.</p>
+<p>The queue should be configured to receive EC2 Spot Instance Interruption Warnings
+and EC2 Instance Rebalance Recommendations via EventBridge rules.
+The AWS Node Termination Handler will poll this queue and cordon/drain nodes
+before they are terminated, providing a best effort for graceful shutdown.</p>
+<p>Supports both standard and FIFO queues (FIFO queues end with .fifo suffix).</p>
 </td>
 </tr>
 </tbody>
@@ -32872,11 +32968,12 @@ MarketType
 </td>
 <td>
 <em>(Optional)</em>
-<p>marketType specifies the market type of the CapacityReservation for the EC2 instances. Valid values are OnDemand, CapacityBlocks and omitted:
+<p>marketType specifies the market type of the CapacityReservation for the EC2 instances.</p>
+<p>Deprecated: Use placement.marketType instead. This field is maintained for backward compatibility.
+When both placement.marketType and capacityReservation.marketType are set, placement.marketType takes precedence.</p>
+<p>Valid values are OnDemand, CapacityBlocks and omitted:
 - &ldquo;OnDemand&rdquo;: EC2 instances run as standard On-Demand instances.
-- &ldquo;CapacityBlocks&rdquo;: scheduled pre-purchased compute capacity. Capacity Blocks is recommended when GPUs are needed to support ML workloads.
-When omitted, this means no opinion and the platform is left to choose a reasonable default, which is subject to change over time.
-The current default value is CapacityBlocks.</p>
+- &ldquo;CapacityBlocks&rdquo;: scheduled pre-purchased compute capacity. Recommended for GPU/ML workloads.</p>
 <p>When set to &lsquo;CapacityBlocks&rsquo;, a specific Capacity Reservation ID must be provided.</p>
 </td>
 </tr>
@@ -33749,6 +33846,9 @@ created in the guest VPC</p>
 <td><p>AWSEndpointServiceAvailable indicates whether the AWS Endpoint Service
 has been created for the specified NLB in the management VPC</p>
 </td>
+</tr><tr><td><p>&#34;BackupCompleted&#34;</p></td>
+<td><p>BackupCompleted indicates whether the etcd backup has completed.</p>
+</td>
 </tr><tr><td><p>&#34;CVOScaledDown&#34;</p></td>
 <td></td>
 </tr><tr><td><p>&#34;CloudResourcesDestroyed&#34;</p></td>
@@ -33787,6 +33887,18 @@ underlying cluster&rsquo;s ClusterVersion.</p>
 </tr><tr><td><p>&#34;RolloutComplete&#34;</p></td>
 <td><p>ControlPlaneComponentRolloutComplete indicates whether the ControlPlaneComponent has completed its rollout.</p>
 </td>
+</tr><tr><td><p>&#34;ControlPlaneConnectionAvailable&#34;</p></td>
+<td><p>ControlPlaneConnectionAvailable indicates whether data plane workloads have a successful
+network connection to the control plane components. This condition is computed using
+a 3-replica Deployment that tests the full data path (DNS resolution of kubernetes.default.svc
+-&gt; advertise address on lo -&gt; apiserver proxy -&gt; KAS on HCP) and reports results to a shared
+ConfigMap. The HCCO evaluates the staleness of the lastSucceeded timestamp in the ConfigMap.
+<strong>True</strong> means the data plane can successfully reach the control plane (a recent successful check was recorded).
+<strong>False</strong> means there are connectivity failures preventing the data plane from reaching the control plane,
+or the last successful check is stale (older than 5 minutes).
+<strong>Unknown</strong> means the status cannot be determined due to true inability to inspect (e.g., no worker nodes exist or inspection cannot be performed),
+not due to missing required components.</p>
+</td>
 </tr><tr><td><p>&#34;DataPlaneConnectionAvailable&#34;</p></td>
 <td><p>DataPlaneConnectionAvailable indicates whether the control plane has a successful
 network connection to the data plane components.
@@ -33794,7 +33906,8 @@ network connection to the data plane components.
 <strong>False</strong> means there are network connection issues preventing the control plane from reaching the data plane.
 A failure here suggests potential issues such as: network policy restrictions,
 firewall rules, missing data plane nodes, or problems with infrastructure
-components like the konnectivity-agent workload.</p>
+components like the konnectivity-agent workload.
+<strong>Unknown</strong> means the status cannot be determined (e.g., no worker nodes available or unable to inspect).</p>
 </td>
 </tr><tr><td><p>&#34;EtcdAvailable&#34;</p></td>
 <td><p>EtcdAvailable bubbles up the same condition from HCP. It signals if etcd is available.
@@ -35803,6 +35916,628 @@ This follows the AWS pattern of having different roles for different purposes.</
 </td>
 </tr>
 </tbody>
+</table>
+###HCPEtcdBackupAzureBlob { #hypershift.openshift.io/v1beta1.HCPEtcdBackupAzureBlob }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStorage">HCPEtcdBackupStorage</a>)
+</p>
+<p>
+<p>HCPEtcdBackupAzureBlob defines the Azure Blob storage configuration for etcd backups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>container</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>container is the name of the Azure Blob container where backups are stored.
+Must be 3-63 characters, lowercase letters, numbers, and hyphens only.
+Must start and end with a letter or number. Consecutive hyphens are not allowed.
+See <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata#container-names">https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers&ndash;blobs&ndash;and-metadata#container-names</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>storageAccount</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>storageAccount is the name of the Azure Storage Account.
+Must be 3-24 characters, lowercase letters and numbers only.
+See <a href="https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview#storage-account-name">https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview#storage-account-name</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyPrefix</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>keyPrefix is the blob name prefix for the backup file.
+Must consist of valid blob name characters: alphanumeric characters, forward slashes,
+hyphens, underscores, and periods.
+See <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata#blob-names">https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers&ndash;blobs&ndash;and-metadata#blob-names</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>credentials,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.SecretReference">
+SecretReference
+</a>
+</em>
+</td>
+<td>
+<p>credentials references a Secret containing Azure credentials for uploading
+to Blob Storage. The Secret must exist in the Hypershift Operator namespace.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>encryptionKeyURL</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>encryptionKeyURL is the URL of the Azure Key Vault key used for encryption.
+Must be a valid Azure Key Vault key URL in the format
+&ldquo;https://<vault-name>.vault.azure.net/keys/<key-name>[/<key-version>]&rdquo;.
+This field is immutable once set and cannot be removed.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupConfig { #hypershift.openshift.io/v1beta1.HCPEtcdBackupConfig }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.ManagedEtcdSpec">ManagedEtcdSpec</a>)
+</p>
+<p>
+<p>HCPEtcdBackupConfig defines the backup encryption configuration that is propagated
+from the HostedCluster to the HostedControlPlane via ManagedEtcdSpec.
+Exactly one platform-specific block must be specified, matching the platform discriminator.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>platform</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigPlatform">
+HCPEtcdBackupConfigPlatform
+</a>
+</em>
+</td>
+<td>
+<p>platform specifies the cloud platform for backup encryption configuration.
+Valid values are &ldquo;AWS&rdquo; for AWS KMS encryption and &ldquo;Azure&rdquo; for Azure Key Vault encryption.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>aws,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigAWS">
+HCPEtcdBackupConfigAWS
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>aws contains AWS-specific backup encryption configuration.
+Required when platform is &ldquo;AWS&rdquo;, and forbidden otherwise.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>azure,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigAzure">
+HCPEtcdBackupConfigAzure
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>azure contains Azure-specific backup encryption configuration.
+Required when platform is &ldquo;Azure&rdquo;, and forbidden otherwise.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupConfigAWS { #hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigAWS }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfig">HCPEtcdBackupConfig</a>)
+</p>
+<p>
+<p>HCPEtcdBackupConfigAWS defines AWS-specific encryption settings for etcd backups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>kmsKeyARN</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>kmsKeyARN is the ARN of the AWS KMS key to use for encrypting etcd backup artifacts in S3.
+Must be a valid AWS KMS key ARN in the format
+&ldquo;arn:<partition>:kms:<region>:<account-id>:key/<key-id>&rdquo;
+where partition is one of aws, aws-cn, or aws-us-gov.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupConfigAzure { #hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigAzure }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfig">HCPEtcdBackupConfig</a>)
+</p>
+<p>
+<p>HCPEtcdBackupConfigAzure defines Azure-specific encryption settings for etcd backups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>encryptionKeyURL</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>encryptionKeyURL is the URL of the Azure Key Vault key to use for encrypting etcd backup artifacts.
+Must be a valid Azure Key Vault key URL in the format
+&ldquo;https://<vault-name>.vault.azure.net/keys/<key-name>[/<key-version>]&rdquo;.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupConfigPlatform { #hypershift.openshift.io/v1beta1.HCPEtcdBackupConfigPlatform }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfig">HCPEtcdBackupConfig</a>)
+</p>
+<p>
+<p>HCPEtcdBackupConfigPlatform identifies the cloud platform for backup encryption configuration.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr><td><p>&#34;AWS&#34;</p></td>
+<td><p>AWSBackupConfigPlatform indicates AWS KMS encryption for backup artifacts.</p>
+</td>
+</tr><tr><td><p>&#34;Azure&#34;</p></td>
+<td><p>AzureBackupConfigPlatform indicates Azure Key Vault encryption for backup artifacts.</p>
+</td>
+</tr></tbody>
+</table>
+###HCPEtcdBackupEncryptionMetadata { #hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadata }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStatus">HCPEtcdBackupStatus</a>)
+</p>
+<p>
+<p>HCPEtcdBackupEncryptionMetadata contains platform-specific metadata about the
+encryption applied to the backup artifact in cloud storage.
+The presence of a platform block indicates that encryption was applied.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>aws,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadataAWS">
+HCPEtcdBackupEncryptionMetadataAWS
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>aws contains AWS-specific encryption metadata for the backup.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>azure,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadataAzure">
+HCPEtcdBackupEncryptionMetadataAzure
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>azure contains Azure-specific encryption metadata for the backup.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupEncryptionMetadataAWS { #hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadataAWS }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadata">HCPEtcdBackupEncryptionMetadata</a>)
+</p>
+<p>
+<p>HCPEtcdBackupEncryptionMetadataAWS contains AWS-specific encryption metadata.
+The values here reflect the encryption settings from the HCPEtcdBackupConfig input.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>kmsKeyARN</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>kmsKeyARN is the ARN of the KMS key used for server-side encryption of the backup in S3.
+Must be a valid AWS KMS key ARN in the format
+&ldquo;arn:<partition>:kms:<region>:<account-id>:key/<key-id>&rdquo;
+where partition is one of aws, aws-cn, or aws-us-gov.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupEncryptionMetadataAzure { #hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadataAzure }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadata">HCPEtcdBackupEncryptionMetadata</a>)
+</p>
+<p>
+<p>HCPEtcdBackupEncryptionMetadataAzure contains Azure-specific encryption metadata.
+The values here reflect the encryption settings from the HCPEtcdBackupConfig input.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>encryptionKeyURL</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>encryptionKeyURL is the URL of the Azure Key Vault key used for encryption of the backup.
+Must be a valid Azure Key Vault key URL in the format
+&ldquo;https://<vault-name>.vault.azure.net/keys/<key-name>[/<key-version>]&rdquo;.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupS3 { #hypershift.openshift.io/v1beta1.HCPEtcdBackupS3 }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStorage">HCPEtcdBackupStorage</a>)
+</p>
+<p>
+<p>HCPEtcdBackupS3 defines the S3 storage configuration for etcd backups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>bucket</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>bucket is the name of the S3 bucket where backups are stored.
+Must be 3-63 characters, lowercase letters, numbers, hyphens, and periods only.
+Must start and end with a letter or number. Consecutive periods are not allowed.
+See <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html">https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>region</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>region is the AWS region where the S3 bucket is located (e.g. &ldquo;us-east-1&rdquo;).
+Must be a valid AWS region identifier: lowercase letters, digits, and hyphens.
+Must start and end with an alphanumeric character, no consecutive hyphens.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyPrefix</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>keyPrefix is the S3 key prefix for the backup file.
+Must consist of safe S3 object key characters: alphanumeric characters,
+forward slashes, hyphens, underscores, periods, exclamation marks,
+asterisks, single quotes, and parentheses.
+See <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html">https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>credentials,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.SecretReference">
+SecretReference
+</a>
+</em>
+</td>
+<td>
+<p>credentials references a Secret containing AWS credentials for uploading
+to S3. The Secret must exist in the Hypershift Operator namespace and contain a
+&lsquo;credentials&rsquo; key with a valid AWS credentials file.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kmsKeyARN</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>kmsKeyARN is the ARN of the KMS key used for server-side encryption of the backup.
+Must be a valid AWS KMS key ARN in the format
+&ldquo;arn:<partition>:kms:<region>:<account-id>:key/<key-id>&rdquo;
+where partition is one of aws, aws-cn, or aws-us-gov.
+This field is immutable once set and cannot be removed.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupSpec { #hypershift.openshift.io/v1beta1.HCPEtcdBackupSpec }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackup">HCPEtcdBackup</a>)
+</p>
+<p>
+<p>HCPEtcdBackupSpec defines the desired state of HCPEtcdBackup.
+HCPEtcdBackup is a one-shot backup request; the entire spec is immutable once created.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>storage,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStorage">
+HCPEtcdBackupStorage
+</a>
+</em>
+</td>
+<td>
+<p>storage defines the cloud storage backend where the etcd snapshot will be uploaded.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupStatus { #hypershift.openshift.io/v1beta1.HCPEtcdBackupStatus }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackup">HCPEtcdBackup</a>)
+</p>
+<p>
+<p>HCPEtcdBackupStatus defines the observed state of HCPEtcdBackup.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>conditions</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#condition-v1-meta">
+[]Kubernetes meta/v1.Condition
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>conditions contains details for the current state of the etcd backup.
+The following condition types are expected:
+- &ldquo;BackupCompleted&rdquo;: indicates whether the etcd backup has completed (True=success, False=failure).</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>snapshotURL</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>snapshotURL is the URL of the completed backup snapshot in cloud storage.
+Must be a valid URL with scheme https or s3.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>encryptionMetadata,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupEncryptionMetadata">
+HCPEtcdBackupEncryptionMetadata
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>encryptionMetadata contains metadata about the encryption of the backup.
+When present, at least one platform-specific encryption block must be set.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupStorage { #hypershift.openshift.io/v1beta1.HCPEtcdBackupStorage }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupSpec">HCPEtcdBackupSpec</a>)
+</p>
+<p>
+<p>HCPEtcdBackupStorage defines the cloud storage backend configuration for the backup.
+Exactly one storage backend must be specified, matching the storageType discriminator.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>storageType</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStorageType">
+HCPEtcdBackupStorageType
+</a>
+</em>
+</td>
+<td>
+<p>storageType specifies the type of cloud storage backend for the etcd backup.
+Valid values are &ldquo;S3&rdquo; for AWS S3 storage and &ldquo;AzureBlob&rdquo; for Azure Blob Storage.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>s3,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupS3">
+HCPEtcdBackupS3
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>s3 specifies the S3 storage configuration for the etcd backup.
+Required when storageType is &ldquo;S3&rdquo;, and forbidden otherwise.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>azureBlob,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupAzureBlob">
+HCPEtcdBackupAzureBlob
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>azureBlob specifies the Azure Blob storage configuration for the etcd backup.
+Required when storageType is &ldquo;AzureBlob&rdquo;, and forbidden otherwise.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###HCPEtcdBackupStorageType { #hypershift.openshift.io/v1beta1.HCPEtcdBackupStorageType }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupStorage">HCPEtcdBackupStorage</a>)
+</p>
+<p>
+<p>HCPEtcdBackupStorageType is the type of storage for etcd backups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr><td><p>&#34;AzureBlob&#34;</p></td>
+<td><p>AzureBlobBackupStorage indicates that the backup is stored in Azure Blob Storage.</p>
+</td>
+</tr><tr><td><p>&#34;S3&#34;</p></td>
+<td><p>S3BackupStorage indicates that the backup is stored in AWS S3.</p>
+</td>
+</tr></tbody>
 </table>
 ###HostedClusterSpec { #hypershift.openshift.io/v1beta1.HostedClusterSpec }
 <p>
@@ -39264,6 +39999,22 @@ ManagedEtcdStorageSpec
 <p>storage specifies how etcd data is persisted.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>backup,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupConfig">
+HCPEtcdBackupConfig
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>backup defines the backup configuration for managed etcd, including
+optional KMS key settings for artifact encryption in cloud storage.
+This configuration is only used when an HCPEtcdBackup CR exists.</p>
+</td>
+</tr>
 </tbody>
 </table>
 ###ManagedEtcdStorageSpec { #hypershift.openshift.io/v1beta1.ManagedEtcdStorageSpec }
@@ -39424,10 +40175,11 @@ credentialsSecretName must also be unique within the Azure Key Vault. See more d
 ###MarketType { #hypershift.openshift.io/v1beta1.MarketType }
 <p>
 (<em>Appears on:</em>
-<a href="#hypershift.openshift.io/v1beta1.CapacityReservationOptions">CapacityReservationOptions</a>)
+<a href="#hypershift.openshift.io/v1beta1.CapacityReservationOptions">CapacityReservationOptions</a>, 
+<a href="#hypershift.openshift.io/v1beta1.PlacementOptions">PlacementOptions</a>)
 </p>
 <p>
-<p>MarketType describes the market type of the CapacityReservation for an Instance.</p>
+<p>MarketType describes the market type for EC2 instances.</p>
 </p>
 <table>
 <thead>
@@ -39437,10 +40189,14 @@ credentialsSecretName must also be unique within the Azure Key Vault. See more d
 </tr>
 </thead>
 <tbody><tr><td><p>&#34;CapacityBlocks&#34;</p></td>
-<td><p>MarketTypeCapacityBlock is a MarketType enum value</p>
+<td><p>MarketTypeCapacityBlock is a MarketType enum value for Capacity Blocks.</p>
 </td>
 </tr><tr><td><p>&#34;OnDemand&#34;</p></td>
-<td><p>MarketTypeOnDemand is a MarketType enum value</p>
+<td><p>MarketTypeOnDemand is a MarketType enum value for standard on-demand instances.</p>
+</td>
+</tr><tr><td><p>&#34;Spot&#34;</p></td>
+<td><p>MarketTypeSpot is a MarketType enum value for Spot instances.
+Spot instances use spare EC2 capacity at reduced prices but may be interrupted.</p>
 </td>
 </tr></tbody>
 </table>
@@ -39850,6 +40606,39 @@ Enabling this feature will cause the controller to automatically delete unhealth
 The unhealthy criteria is reserved for the controller implementation and subject to change.
 But generally it&rsquo;s determined by checking the Node ready condition is true and a timeout that might vary depending on the platform provider.
 AutoRepair will no-op when more than 2 Nodes are unhealthy at the same time. Giving time for the cluster to stabilize or to the user to manually intervene.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###NodePoolNodesInfo { #hypershift.openshift.io/v1beta1.NodePoolNodesInfo }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.NodePoolStatus">NodePoolStatus</a>)
+</p>
+<p>
+<p>NodePoolNodesInfo aggregates observed information about nodes belonging to this NodePool.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>nodeVersions</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.NodeVersion">
+[]NodeVersion
+</a>
+</em>
+</td>
+<td>
+<p>nodeVersions summarizes the versions and health of nodes belonging
+to this NodePool. Each entry represents a distinct version combination
+and the number of ready/unready nodes running it.</p>
 </td>
 </tr>
 </tbody>
@@ -40323,6 +41112,21 @@ the NodePool.</p>
 </tr>
 <tr>
 <td>
+<code>nodesInfo,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.NodePoolNodesInfo">
+NodePoolNodesInfo
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>nodesInfo contains aggregated information observed from nodes belonging
+to this NodePool.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>platform</code></br>
 <em>
 <a href="#hypershift.openshift.io/v1beta1.NodePoolPlatformStatus">
@@ -40390,6 +41194,73 @@ int32
 <em>(Optional)</em>
 <p>port is the port of the NodePort service. If &lt;=0, the port is dynamically
 assigned when the service is created.</p>
+</td>
+</tr>
+</tbody>
+</table>
+###NodeVersion { #hypershift.openshift.io/v1beta1.NodeVersion }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.NodePoolNodesInfo">NodePoolNodesInfo</a>)
+</p>
+<p>
+<p>NodeVersion represents a version combination and the count of ready and unready nodes running it.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ocpVersion</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>ocpVersion is the OpenShift release version this node was provisioned
+or upgraded with.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kubeletVersion</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>kubeletVersion is the kubelet version reported by the node, as observed
+from Machine.Status.NodeInfo.KubeletVersion.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>readyNodeCount</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>readyNodeCount is the number of nodes running this version where the
+CAPI NodeHealthy condition is True.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>unreadyNodeCount</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>unreadyNodeCount is the number of nodes running this version where the
+CAPI NodeHealthy condition is not True. Useful for tracking upgrade
+progress and detecting stuck nodes.</p>
 </td>
 </tr>
 </tbody>
@@ -40999,6 +41870,10 @@ This field is immutable</p>
 </p>
 <p>
 <p>PlacementOptions specifies the placement options for the EC2 instances.</p>
+<p>The instance market type is determined by the marketType field:
+- &ldquo;OnDemand&rdquo; (default): Standard on-demand instances
+- &ldquo;Spot&rdquo;: Spot instances using spare EC2 capacity at reduced prices
+- &ldquo;CapacityBlocks&rdquo;: Scheduled pre-purchased compute capacity for ML workloads</p>
 </p>
 <table>
 <thead>
@@ -41028,6 +41903,45 @@ as AWS does not support Capacity Reservations with Dedicated Hosts.</p>
 </tr>
 <tr>
 <td>
+<code>marketType</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.MarketType">
+MarketType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>marketType specifies the EC2 instance purchasing model.
+Supported values are &ldquo;OnDemand&rdquo; for standard on-demand instances,
+&ldquo;Spot&rdquo; for spot instances that use spare EC2 capacity at reduced prices
+but may be interrupted (optionally accepts spot options and requires
+terminationHandlerQueueURL on the HostedCluster), and &ldquo;CapacityBlocks&rdquo; for scheduled pre-purchased
+compute capacity recommended for GPU/ML workloads (requires
+capacityReservation with a specific reservation ID).
+When omitted, the default is &ldquo;OnDemand&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>spot,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.SpotOptions">
+SpotOptions
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>spot configures optional Spot instance overrides.
+When omitted, Spot instances use AWS defaults.</p>
+<p>Spot instances use spare EC2 capacity at reduced prices but may be interrupted
+with a 2-minute warning. Requires terminationHandlerQueueURL to be set on the
+HostedCluster&rsquo;s AWS platform spec for graceful handling of interruptions.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>capacityReservation</code></br>
 <em>
 <a href="#hypershift.openshift.io/v1beta1.CapacityReservationOptions">
@@ -41040,6 +41954,7 @@ CapacityReservationOptions
 <p>capacityReservation specifies Capacity Reservation options for the NodePool instances.</p>
 <p>Cannot be specified when tenancy is set to &ldquo;host&rdquo; as Dedicated Hosts
 do not support Capacity Reservations. Compatible with &ldquo;default&rdquo; and &ldquo;dedicated&rdquo; tenancy.</p>
+<p>Required when marketType is &ldquo;CapacityBlocks&rdquo;.</p>
 </td>
 </tr>
 </tbody>
@@ -42596,6 +43511,39 @@ AESCBCSpec
 </td>
 </tr></tbody>
 </table>
+###SecretReference { #hypershift.openshift.io/v1beta1.SecretReference }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupAzureBlob">HCPEtcdBackupAzureBlob</a>, 
+<a href="#hypershift.openshift.io/v1beta1.HCPEtcdBackupS3">HCPEtcdBackupS3</a>)
+</p>
+<p>
+<p>SecretReference contains a reference to a Secret by name.
+The Secret must exist in the same namespace as the referencing resource.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>name is the name of the Secret. It must be a valid DNS-1123 subdomain: at most
+253 characters, consisting of lowercase alphanumeric characters, hyphens, and periods.
+Each period-separated segment must start and end with an alphanumeric character.</p>
+</td>
+</tr>
+</tbody>
+</table>
 ###ServiceNetworkEntry { #hypershift.openshift.io/v1beta1.ServiceNetworkEntry }
 <p>
 (<em>Appears on:</em>
@@ -42760,6 +43708,44 @@ ServicePublishingStrategy
 <p>ServiceType defines what control plane services can be exposed from the
 management control plane.</p>
 </p>
+###SpotOptions { #hypershift.openshift.io/v1beta1.SpotOptions }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.PlacementOptions">PlacementOptions</a>)
+</p>
+<p>
+<p>SpotOptions configures options for Spot instances.</p>
+<p>Spot instances use spare EC2 capacity at reduced prices but may be interrupted
+with a 2-minute warning when EC2 needs the capacity back.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>maxPrice</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>maxPrice defines the maximum price the user is willing to pay for Spot instances.
+If not specified, the on-demand price is used as the maximum (you pay the actual spot price).
+The value should be a decimal number representing the price per hour in USD.
+For example, &ldquo;0.50&rdquo; means 50 cents per hour.</p>
+<p>Note: AWS recommends NOT setting maxPrice to reduce interruption frequency.
+When omitted, you pay the current Spot price (capped at On-Demand price).
+AWS minimum allowed value is $0.001.</p>
+</td>
+</tr>
+</tbody>
+</table>
 ###SubnetFilter { #hypershift.openshift.io/v1beta1.SubnetFilter }
 <p>
 (<em>Appears on:</em>

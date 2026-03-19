@@ -330,7 +330,8 @@ func (r *Reconciler) reconcileOpenshiftEC2NodeClassDefault(ctx context.Context, 
 			SubnetSelectorTerms: []hyperkarpenterv1.SubnetSelectorTerm{
 				{
 					Tags: map[string]string{
-						"karpenter.sh/discovery": hcp.Spec.InfraID,
+						"kubernetes.io/role/internal-elb":                         "1",
+						fmt.Sprintf("kubernetes.io/cluster/%s", hcp.Spec.InfraID): "*",
 					},
 				},
 			},
@@ -344,7 +345,7 @@ func (r *Reconciler) reconcileOpenshiftEC2NodeClassDefault(ctx context.Context, 
 		}
 
 		if hcp.Annotations[hyperv1.AWSMachinePublicIPs] == "true" {
-			ec2NodeClass.Spec.AssociatePublicIPAddress = ptr.To(true)
+			ec2NodeClass.Spec.IPAddressAssociation = hyperkarpenterv1.IPAddressAssociationPublic
 		}
 		return nil
 	})

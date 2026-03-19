@@ -191,6 +191,30 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.GCPServiceAccountsEmailsApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("GCPWorkloadIdentityConfig"):
 		return &hypershiftv1beta1.GCPWorkloadIdentityConfigApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackup"):
+		return &hypershiftv1beta1.HCPEtcdBackupApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupAzureBlob"):
+		return &hypershiftv1beta1.HCPEtcdBackupAzureBlobApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfig"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfigAWS"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigAWSApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfigAzure"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigAzureApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadata"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadataAWS"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataAWSApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadataAzure"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataAzureApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupS3"):
+		return &hypershiftv1beta1.HCPEtcdBackupS3ApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupSpec"):
+		return &hypershiftv1beta1.HCPEtcdBackupSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupStatus"):
+		return &hypershiftv1beta1.HCPEtcdBackupStatusApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupStorage"):
+		return &hypershiftv1beta1.HCPEtcdBackupStorageApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("HostedCluster"):
 		return &hypershiftv1beta1.HostedClusterApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("HostedClusterSpec"):
@@ -283,6 +307,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.NodePoolConditionApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolManagement"):
 		return &hypershiftv1beta1.NodePoolManagementApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("NodePoolNodesInfo"):
+		return &hypershiftv1beta1.NodePoolNodesInfoApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolPlatform"):
 		return &hypershiftv1beta1.NodePoolPlatformApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolPlatformStatus"):
@@ -293,6 +319,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.NodePoolStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePortPublishingStrategy"):
 		return &hypershiftv1beta1.NodePortPublishingStrategyApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("NodeVersion"):
+		return &hypershiftv1beta1.NodeVersionApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackIdentityReference"):
 		return &hypershiftv1beta1.OpenStackIdentityReferenceApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackNodePoolPlatform"):
@@ -341,12 +369,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.ScaleDownConfigApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SecretEncryptionSpec"):
 		return &hypershiftv1beta1.SecretEncryptionSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("SecretReference"):
+		return &hypershiftv1beta1.SecretReferenceApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServiceNetworkEntry"):
 		return &hypershiftv1beta1.ServiceNetworkEntryApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServicePublishingStrategy"):
 		return &hypershiftv1beta1.ServicePublishingStrategyApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServicePublishingStrategyMapping"):
 		return &hypershiftv1beta1.ServicePublishingStrategyMappingApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("SpotOptions"):
+		return &hypershiftv1beta1.SpotOptionsApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SubnetFilter"):
 		return &hypershiftv1beta1.SubnetFilterApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SubnetParam"):
