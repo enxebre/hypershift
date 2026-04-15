@@ -3386,6 +3386,9 @@ spec:
                     is 'Other'
                   rule: 'has(self.allocateNodeCIDRs) && self.allocateNodeCIDRs ==
                     ''Enabled'' ? self.networkType == ''Other'' : true'
+                - message: machineNetwork is immutable and cannot be removed once
+                    set.
+                  rule: '!has(oldSelf.machineNetwork) || has(self.machineNetwork)'
               nodeSelector:
                 additionalProperties:
                   type: string
