@@ -741,8 +741,7 @@ tests:
       apiVersion: hypershift.openshift.io/v1beta1
       kind: HostedCluster
       spec:
-        networking:
-          clusterNetwork: []
+        networking: {}
         dns:
           baseDomain: example.com
         platform:
@@ -895,8 +894,7 @@ tests:
       apiVersion: hypershift.openshift.io/v1beta1
       kind: HostedCluster
       spec:
-        networking:
-          serviceNetwork: []
+        networking: {}
         dns:
           baseDomain: example.com
         platform:
@@ -1049,8 +1047,7 @@ tests:
       apiVersion: hypershift.openshift.io/v1beta1
       kind: HostedCluster
       spec:
-        networking:
-          machineNetwork: []
+        networking: {}
         dns:
           baseDomain: example.com
         platform:
