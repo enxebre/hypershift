@@ -1097,7 +1097,6 @@ type ClusterNetworking struct {
 	// +kubebuilder:validation:MaxItems=2
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:ListType=atomic
-	// +immutable
 	// +optional
 	MachineNetwork []MachineNetworkEntry `json:"machineNetwork,omitempty"`
 
@@ -1105,7 +1104,6 @@ type ClusterNetworking struct {
 	// Defaults to cidr: "10.132.0.0/14".
 	// Currently only one entry is supported.
 	// This field is immutable.
-	// +immutable
 	// +optional
 	// +kubebuilder:default:={{cidr: "10.132.0.0/14"}}
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="clusterNetwork is immutable and cannot be modified once set."
