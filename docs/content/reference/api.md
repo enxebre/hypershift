@@ -5557,6 +5557,97 @@ with any other NetworkType will result in a validation error during cluster crea
 </tr>
 </tbody>
 </table>
+###ClusterUpdateHistory { #hypershift.openshift.io/v1beta1.ClusterUpdateHistory }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.ClusterVersionStatus">ClusterVersionStatus</a>)
+</p>
+<p>
+<p>ClusterUpdateHistory is a per-cluster version of configv1.UpdateHistory with
+proper omitempty tags so that nil pointers serialize as field-absent instead
+of explicit null. This makes the type safe for use with JSON Merge Patch
+(RFC 7386), which interprets null as &ldquo;delete field&rdquo;.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>state</code></br>
+<em>
+<a href="https://docs.openshift.com/container-platform/4.10/rest_api/config_apis/config-apis-index.html">
+github.com/openshift/api/config/v1.UpdateState
+</a>
+</em>
+</td>
+<td>
+<p>state reflects whether the update was fully applied. The Partial state
+indicates the update is not fully applied, while the Completed state
+indicates the update was successfully rolled out.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>startedTime,omitempty,omitzero</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<p>startedTime is the time at which the update was started.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>completionTime</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>completionTime, if set, is when the update was fully applied. The update
+that is currently being applied will have a null completion time.
+Completion time will always be set for entries that are not the current
+update (usually to the started time of the next update).</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>version</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>version is a semantic version identifying the update version. When the
+requested image does not define a version, or if a failure occurs
+retrieving the image, this value may be empty.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>image</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>image is a container image location that contains the update.</p>
+</td>
+</tr>
+</tbody>
+</table>
 ###ClusterVersionOperatorSpec { #hypershift.openshift.io/v1beta1.ClusterVersionOperatorSpec }
 <p>
 (<em>Appears on:</em>
@@ -5615,7 +5706,7 @@ progress, or is failing.</p>
 <tbody>
 <tr>
 <td>
-<code>desired</code></br>
+<code>desired,omitempty,omitzero</code></br>
 <em>
 <a href="https://docs.openshift.com/container-platform/4.10/rest_api/config_apis/config-apis-index.html">
 github.com/openshift/api/config/v1.Release
@@ -5632,8 +5723,8 @@ with the information available, which may be an image or a tag.</p>
 <td>
 <code>history</code></br>
 <em>
-<a href="https://docs.openshift.com/container-platform/4.10/rest_api/config_apis/config-apis-index.html">
-[]github.com/openshift/api/config/v1.UpdateHistory
+<a href="#hypershift.openshift.io/v1beta1.ClusterUpdateHistory">
+[]ClusterUpdateHistory
 </a>
 </em>
 </td>
@@ -5650,12 +5741,13 @@ is preserved.</p>
 </tr>
 <tr>
 <td>
-<code>observedGeneration</code></br>
+<code>observedGeneration,omitempty,omitzero</code></br>
 <em>
 int64
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>observedGeneration reports which version of the spec is being synced.
 If this value is not equal to metadata.generation, then the desired
 and conditions fields may represent a previous version.</p>
@@ -5671,6 +5763,7 @@ and conditions fields may represent a previous version.</p>
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>availableUpdates contains updates recommended for this
 cluster. Updates which appear in conditionalUpdates but not in
 availableUpdates may expose this cluster to known issues. This list

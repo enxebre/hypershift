@@ -24,11 +24,11 @@ import (
 // ClusterVersionStatusApplyConfiguration represents a declarative configuration of the ClusterVersionStatus type for use
 // with apply.
 type ClusterVersionStatusApplyConfiguration struct {
-	Desired            *v1.Release            `json:"desired,omitempty"`
-	History            []v1.UpdateHistory     `json:"history,omitempty"`
-	ObservedGeneration *int64                 `json:"observedGeneration,omitempty"`
-	AvailableUpdates   []v1.Release           `json:"availableUpdates,omitempty"`
-	ConditionalUpdates []v1.ConditionalUpdate `json:"conditionalUpdates,omitempty"`
+	Desired            *v1.Release                              `json:"desired,omitempty"`
+	History            []ClusterUpdateHistoryApplyConfiguration `json:"history,omitempty"`
+	ObservedGeneration *int64                                   `json:"observedGeneration,omitempty"`
+	AvailableUpdates   []v1.Release                             `json:"availableUpdates,omitempty"`
+	ConditionalUpdates []v1.ConditionalUpdate                   `json:"conditionalUpdates,omitempty"`
 }
 
 // ClusterVersionStatusApplyConfiguration constructs a declarative configuration of the ClusterVersionStatus type for use with
@@ -48,9 +48,12 @@ func (b *ClusterVersionStatusApplyConfiguration) WithDesired(value v1.Release) *
 // WithHistory adds the given value to the History field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the History field.
-func (b *ClusterVersionStatusApplyConfiguration) WithHistory(values ...v1.UpdateHistory) *ClusterVersionStatusApplyConfiguration {
+func (b *ClusterVersionStatusApplyConfiguration) WithHistory(values ...*ClusterUpdateHistoryApplyConfiguration) *ClusterVersionStatusApplyConfiguration {
 	for i := range values {
-		b.History = append(b.History, values[i])
+		if values[i] == nil {
+			panic("nil value passed to WithHistory")
+		}
+		b.History = append(b.History, *values[i])
 	}
 	return b
 }

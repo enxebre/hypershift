@@ -7498,7 +7498,6 @@ spec:
                       - version
                       type: object
                     maxItems: 100
-                    nullable: true
                     type: array
                   conditionalUpdates:
                     description: |-
@@ -7757,17 +7756,12 @@ spec:
                       applied the state will be Partial. Only a limited amount of update history
                       is preserved.
                     items:
-                      description: UpdateHistory is a single attempted update to the
-                        cluster.
+                      description: |-
+                        ClusterUpdateHistory is a per-cluster version of configv1.UpdateHistory with
+                        proper omitempty tags so that nil pointers serialize as field-absent instead
+                        of explicit null. This makes the type safe for use with JSON Merge Patch
+                        (RFC 7386), which interprets null as "delete field".
                       properties:
-                        acceptedRisks:
-                          description: |-
-                            acceptedRisks records risks which were accepted to initiate the update.
-                            For example, it may mention an Upgradeable=False or missing signature
-                            that was overridden via desiredUpdate.force, or an update that was
-                            initiated despite not being in the availableUpdates set of recommended
-                            update targets.
-                          type: string
                         completionTime:
                           description: |-
                             completionTime, if set, is when the update was fully applied. The update
@@ -7775,12 +7769,10 @@ spec:
                             Completion time will always be set for entries that are not the current
                             update (usually to the started time of the next update).
                           format: date-time
-                          nullable: true
                           type: string
                         image:
-                          description: |-
-                            image is a container image location that contains the update. This value
-                            is always populated.
+                          description: image is a container image location that contains
+                            the update.
                           type: string
                         startedTime:
                           description: startedTime is the time at which the update
@@ -7791,28 +7783,21 @@ spec:
                           description: |-
                             state reflects whether the update was fully applied. The Partial state
                             indicates the update is not fully applied, while the Completed state
-                            indicates the update was successfully rolled out at least once (all
-                            parts of the update successfully applied).
+                            indicates the update was successfully rolled out.
+                          enum:
+                          - Completed
+                          - Partial
                           type: string
-                        verified:
-                          description: |-
-                            verified indicates whether the provided update was properly verified
-                            before it was installed. If this is false the cluster may not be trusted.
-                            Verified does not cover upgradeable checks that depend on the cluster
-                            state at the time when the update target was accepted.
-                          type: boolean
                         version:
                           description: |-
-                            version is a semantic version identifying the update version. If the
+                            version is a semantic version identifying the update version. When the
                             requested image does not define a version, or if a failure occurs
                             retrieving the image, this value may be empty.
                           type: string
                       required:
-                      - completionTime
                       - image
                       - startedTime
                       - state
-                      - verified
                       type: object
                     type: array
                   observedGeneration:
@@ -7823,9 +7808,7 @@ spec:
                     format: int64
                     type: integer
                 required:
-                - availableUpdates
                 - desired
-                - observedGeneration
                 type: object
             type: object
         type: object
