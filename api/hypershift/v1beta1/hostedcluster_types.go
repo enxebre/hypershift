@@ -2236,7 +2236,7 @@ type ClusterVersionStatus struct {
 	// If the cluster is not yet fully initialized desired will be set
 	// with the information available, which may be an image or a tag.
 	// +required
-	Desired configv1.Release `json:"desired"`
+	Desired configv1.Release `json:"desired,omitempty,omitzero"`
 
 	// history contains a list of the most recent versions applied to the cluster.
 	// This value may be empty during cluster startup, and then will be updated
@@ -2247,23 +2247,22 @@ type ClusterVersionStatus struct {
 	// is preserved.
 	//
 	// +optional
-	History []configv1.UpdateHistory `json:"history,omitempty"`
+	History []ClusterUpdateHistory `json:"history,omitempty"`
 
 	// observedGeneration reports which version of the spec is being synced.
 	// If this value is not equal to metadata.generation, then the desired
 	// and conditions fields may represent a previous version.
-	// +required
-	ObservedGeneration int64 `json:"observedGeneration"`
+	// +optional
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty,omitzero"`
 
 	// availableUpdates contains updates recommended for this
 	// cluster. Updates which appear in conditionalUpdates but not in
 	// availableUpdates may expose this cluster to known issues. This list
 	// may be empty if no updates are recommended, if the update service
 	// is unavailable, or if an invalid channel has been specified.
-	// +nullable
-	// +required
+	// +optional
 	// +kubebuilder:validation:MaxItems=100
-	AvailableUpdates []configv1.Release `json:"availableUpdates"`
+	AvailableUpdates []configv1.Release `json:"availableUpdates,omitempty"`
 
 	// conditionalUpdates contains the list of updates that may be
 	// recommended for this cluster if it meets specific required
@@ -2276,6 +2275,41 @@ type ClusterVersionStatus struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=100
 	ConditionalUpdates []configv1.ConditionalUpdate `json:"conditionalUpdates,omitempty"`
+}
+
+// ClusterUpdateHistory is a per-cluster version of configv1.UpdateHistory with
+// proper omitempty tags so that nil pointers serialize as field-absent instead
+// of explicit null. This makes the type safe for use with JSON Merge Patch
+// (RFC 7386), which interprets null as "delete field".
+// +k8s:deepcopy-gen=true
+type ClusterUpdateHistory struct {
+	// state reflects whether the update was fully applied. The Partial state
+	// indicates the update is not fully applied, while the Completed state
+	// indicates the update was successfully rolled out.
+	// +required
+	// +kubebuilder:validation:Enum=Completed;Partial
+	State configv1.UpdateState `json:"state,omitempty"`
+
+	// startedTime is the time at which the update was started.
+	// +required
+	StartedTime metav1.Time `json:"startedTime,omitempty,omitzero"`
+
+	// completionTime, if set, is when the update was fully applied. The update
+	// that is currently being applied will have a null completion time.
+	// Completion time will always be set for entries that are not the current
+	// update (usually to the started time of the next update).
+	// +optional
+	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
+
+	// version is a semantic version identifying the update version. When the
+	// requested image does not define a version, or if a failure occurs
+	// retrieving the image, this value may be empty.
+	// +optional
+	Version *string `json:"version,omitempty"`
+
+	// image is a container image location that contains the update.
+	// +required
+	Image *string `json:"image,omitempty"`
 }
 
 // ConfigurationStatus contains the status of HostedCluster configuration
