@@ -636,7 +636,7 @@ func WaitForDataPlaneRollout(t testing.TB, ctx context.Context, client crclient.
 					lastVersionCompletionTime.Equal(hostedCluster.Status.Version.History[0].CompletionTime) {
 					return false, "HostedCluster version history has not been updated yet", nil
 				}
-				if wanted, got := hostedCluster.Status.Version.Desired.Image, hostedCluster.Status.Version.History[0].Image; wanted != got {
+				if wanted, got := hostedCluster.Status.Version.Desired.Image, ptr.Deref(hostedCluster.Status.Version.History[0].Image, ""); wanted != got {
 					return false, fmt.Sprintf("desired image %s doesn't match most recent image in history %s", wanted, got), nil
 				}
 				if wanted, got := configv1.CompletedUpdate, hostedCluster.Status.Version.History[0].State; wanted != got {

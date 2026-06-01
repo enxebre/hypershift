@@ -161,7 +161,7 @@ func TestReportInitialRollingOutDuration(t *testing.T) {
 	testCases := []struct {
 		name          string
 		timestamp     time.Time
-		updateHistory []configv1.UpdateHistory
+		updateHistory []hyperv1.ClusterUpdateHistory
 		expected      *dto.MetricFamily
 	}{
 		{
@@ -172,33 +172,33 @@ func TestReportInitialRollingOutDuration(t *testing.T) {
 		{
 			name:      "When cluster is not yet provisioned, metric reports the elapsed time since the cluster has been created",
 			timestamp: now.Add(30 * time.Minute),
-			updateHistory: []configv1.UpdateHistory{{
+			updateHistory: []hyperv1.ClusterUpdateHistory{{
 				StartedTime: metav1.Time{Time: now.Add(5 * time.Minute)},
-				Version:     "1.0",
+				Version:     ptr.To("1.0"),
 			}},
 			expected: wrapExpectedValueAsMetric(1800),
 		},
 		{
 			name:      "When cluster is provisioned, metric is not reported anymore",
 			timestamp: now.Add(30 * time.Minute),
-			updateHistory: []configv1.UpdateHistory{{
+			updateHistory: []hyperv1.ClusterUpdateHistory{{
 				StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 				CompletionTime: &metav1.Time{Time: now.Add(30 * time.Minute)},
-				Version:        "1.0",
+				Version:        ptr.To("1.0"),
 			}},
 		},
 		{
 			name:      "When cluster is upgrading, metric is not reported",
 			timestamp: now.Add(5*time.Hour + 30*time.Minute),
-			updateHistory: []configv1.UpdateHistory{
+			updateHistory: []hyperv1.ClusterUpdateHistory{
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 					CompletionTime: &metav1.Time{Time: now.Add(1 * time.Hour)},
-					Version:        "1.0",
+					Version:        ptr.To("1.0"),
 				},
 				{
 					StartedTime: metav1.Time{Time: now.Add(5 * time.Hour)},
-					Version:     "1.1",
+					Version:     ptr.To("1.1"),
 				},
 			},
 		},
@@ -263,7 +263,7 @@ func TestReportUpgradingDuration(t *testing.T) {
 	testCases := []struct {
 		name          string
 		timestamp     time.Time
-		updateHistory []configv1.UpdateHistory
+		updateHistory []hyperv1.ClusterUpdateHistory
 		expected      *dto.MetricFamily
 	}{
 		{
@@ -273,32 +273,32 @@ func TestReportUpgradingDuration(t *testing.T) {
 		{
 			name:      "When cluster is not yet provisioned, metric is not reported",
 			timestamp: now.Add(30 * time.Minute),
-			updateHistory: []configv1.UpdateHistory{{
+			updateHistory: []hyperv1.ClusterUpdateHistory{{
 				StartedTime: metav1.Time{Time: now.Add(5 * time.Minute)},
-				Version:     "1.0",
+				Version:     ptr.To("1.0"),
 			}},
 		},
 		{
 			name:      "When cluster is provisioned, metric is not reported",
 			timestamp: now.Add(30 * time.Minute),
-			updateHistory: []configv1.UpdateHistory{{
+			updateHistory: []hyperv1.ClusterUpdateHistory{{
 				StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 				CompletionTime: &metav1.Time{Time: now.Add(30 * time.Minute)},
-				Version:        "1.0",
+				Version:        ptr.To("1.0"),
 			}},
 		},
 		{
 			name:      "When cluster is upgrading, metric reports the time since the beginning of the upgrade",
 			timestamp: now.Add(5*time.Hour + 30*time.Minute),
-			updateHistory: []configv1.UpdateHistory{
+			updateHistory: []hyperv1.ClusterUpdateHistory{
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 					CompletionTime: &metav1.Time{Time: now.Add(1 * time.Hour)},
-					Version:        "1.0",
+					Version:        ptr.To("1.0"),
 				},
 				{
 					StartedTime: metav1.Time{Time: now.Add(5 * time.Hour)},
-					Version:     "1.1",
+					Version:     ptr.To("1.1"),
 				},
 			},
 			expected: wrapExpectedValueAsMetric(1800, "1.0", "1.1"),
@@ -306,36 +306,36 @@ func TestReportUpgradingDuration(t *testing.T) {
 		{
 			name:      "When cluster has upgraded, metric is not reported again",
 			timestamp: now.Add(5*time.Hour + 30*time.Minute),
-			updateHistory: []configv1.UpdateHistory{
+			updateHistory: []hyperv1.ClusterUpdateHistory{
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 					CompletionTime: &metav1.Time{Time: now.Add(1 * time.Hour)},
-					Version:        "1.0",
+					Version:        ptr.To("1.0"),
 				},
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Hour)},
 					CompletionTime: &metav1.Time{Time: now.Add(5*time.Hour + 30*time.Minute)},
-					Version:        "1.1",
+					Version:        ptr.To("1.1"),
 				},
 			},
 		},
 		{
 			name:      "When cluster is upgrading again, metric reports the time since the beginning of the upgrade again",
 			timestamp: now.Add(12*time.Hour + 20*time.Minute),
-			updateHistory: []configv1.UpdateHistory{
+			updateHistory: []hyperv1.ClusterUpdateHistory{
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Minute)},
 					CompletionTime: &metav1.Time{Time: now.Add(1 * time.Hour)},
-					Version:        "1.0",
+					Version:        ptr.To("1.0"),
 				},
 				{
 					StartedTime:    metav1.Time{Time: now.Add(5 * time.Hour)},
 					CompletionTime: &metav1.Time{Time: now.Add(5*time.Hour + 30*time.Minute)},
-					Version:        "1.1",
+					Version:        ptr.To("1.1"),
 				},
 				{
 					StartedTime: metav1.Time{Time: now.Add(12 * time.Hour)},
-					Version:     "1.2",
+					Version:     ptr.To("1.2"),
 				},
 			},
 			expected: wrapExpectedValueAsMetric(1200, "1.1", "1.2"),

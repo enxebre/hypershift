@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -409,7 +410,7 @@ func collectUpgradingDurationMetric(ch chan<- prometheus.Metric, clk clock.Clock
 		upgradingDurationMetricDesc,
 		prometheus.GaugeValue,
 		clk.Since(newVersionEntry.StartedTime.Time).Seconds(),
-		append(hclusterLabelValues, previousVersionEntry.Version, newVersionEntry.Version)...,
+		append(hclusterLabelValues, ptr.Deref(previousVersionEntry.Version, ""), ptr.Deref(newVersionEntry.Version, ""))...,
 	)
 }
 

@@ -670,9 +670,9 @@ func TestGetHostedClusterVersion(t *testing.T) {
 		{
 			name: "version history status has a completed entry, should return the completed version",
 			versionStatus: &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
-						Version:        "4.14.0",
+						Version:        ptr.To("4.14.0"),
 						CompletionTime: ptr.To(metav1.Now()),
 					},
 				},
@@ -683,9 +683,9 @@ func TestGetHostedClusterVersion(t *testing.T) {
 		{
 			name: "version history status has no completed entries, should return release image version",
 			versionStatus: &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
-						Version:        "4.14.0",
+						Version:        ptr.To("4.14.0"),
 						CompletionTime: nil,
 					},
 				},
@@ -696,13 +696,13 @@ func TestGetHostedClusterVersion(t *testing.T) {
 		{
 			name: "version history status has multiple entries, should return the first completed version",
 			versionStatus: &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
-						Version:        "4.16.0",
+						Version:        ptr.To("4.16.0"),
 						CompletionTime: nil,
 					},
 					{
-						Version:        "4.15.0",
+						Version:        ptr.To("4.15.0"),
 						CompletionTime: ptr.To(metav1.Now()),
 					},
 				},
@@ -2769,10 +2769,10 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 		},
 		Status: hyperv1.HostedClusterStatus{
 			Version: &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
 						State:   configv1.CompletedUpdate,
-						Version: "4.18.5",
+						Version: ptr.To("4.18.5"),
 					},
 				},
 			},
@@ -2836,7 +2836,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.17.0"
+				hc.Status.Version.History[0].Version = ptr.To("4.17.0")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -2860,7 +2860,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.18.0"
+				hc.Status.Version.History[0].Version = ptr.To("4.18.0")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -2884,7 +2884,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History = []configv1.UpdateHistory{}
+				hc.Status.Version.History = []hyperv1.ClusterUpdateHistory{}
 				hc.Status.Version.Desired = configv1.Release{
 					Version: "4.18.5",
 				}
@@ -2911,7 +2911,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.18.0"
+				hc.Status.Version.History[0].Version = ptr.To("4.18.0")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -2935,7 +2935,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.18.0"
+				hc.Status.Version.History[0].Version = ptr.To("4.18.0")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -2959,7 +2959,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.18.10"
+				hc.Status.Version.History[0].Version = ptr.To("4.18.10")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -2983,7 +2983,7 @@ func TestSupportedVersionSkewCondition(t *testing.T) {
 			}(),
 			hostedCluster: func() *hyperv1.HostedCluster {
 				hc := baseHostedCluster.DeepCopy()
-				hc.Status.Version.History[0].Version = "4.18.5"
+				hc.Status.Version.History[0].Version = ptr.To("4.18.5")
 				return hc
 			}(),
 			releaseProvider: &fakereleaseprovider.FakeReleaseProvider{
@@ -3064,10 +3064,10 @@ func TestNodePoolReconciler_reconcile(t *testing.T) {
 				},
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.CompletedUpdate,
-								Version: "4.18.5",
+								Version: ptr.To("4.18.5"),
 							},
 						},
 					},
@@ -3112,10 +3112,10 @@ func TestNodePoolReconciler_reconcile(t *testing.T) {
 				},
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.CompletedUpdate,
-								Version: "4.18.5",
+								Version: ptr.To("4.18.5"),
 							},
 						},
 					},
@@ -3162,10 +3162,10 @@ func TestNodePoolReconciler_reconcile(t *testing.T) {
 					// Missing IgnitionEndpoint - this should cause early exit
 					IgnitionEndpoint: "",
 					Version: &hyperv1.ClusterVersionStatus{
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.CompletedUpdate,
-								Version: "4.18.5",
+								Version: ptr.To("4.18.5"),
 							},
 						},
 					},

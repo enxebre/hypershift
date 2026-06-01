@@ -9,6 +9,8 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/support/releaseinfo"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/blang/semver"
 	"github.com/onsi/ginkgo/v2"
 )
@@ -68,11 +70,11 @@ func SetReleaseImageVersion(ctx context.Context, latestReleaseImage string, pull
 }
 
 func SetReleaseVersionFromHostedCluster(ctx context.Context, hostedCluster *hyperv1.HostedCluster) error {
-	if hostedCluster.Status.Version == nil || len(hostedCluster.Status.Version.History) == 0 || hostedCluster.Status.Version.History[0].Version == "" {
+	if hostedCluster.Status.Version == nil || len(hostedCluster.Status.Version.History) == 0 || ptr.Deref(hostedCluster.Status.Version.History[0].Version, "") == "" {
 		fmt.Fprintf(ginkgo.GinkgoWriter, "WARNING: cannot determine release version from HostedCluster")
 		return nil
 	}
-	hcVersion := hostedCluster.Status.Version.History[0].Version
+	hcVersion := ptr.Deref(hostedCluster.Status.Version.History[0].Version, "")
 	var err error
 	releaseVersion, err = semver.Parse(hcVersion)
 	if err != nil {

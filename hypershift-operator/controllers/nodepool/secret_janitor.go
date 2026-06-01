@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -181,7 +182,7 @@ func (r *NodePoolReconciler) shouldKeepOldUserData(ctx context.Context, hc *hype
 	releaseImage := hc.Spec.Release.Image
 	if hc.Status.Version != nil {
 		if len(hc.Status.Version.History) > 0 {
-			releaseImage = hc.Status.Version.History[0].Image
+			releaseImage = ptr.Deref(hc.Status.Version.History[0].Image, "")
 		}
 	}
 

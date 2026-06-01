@@ -105,10 +105,20 @@ func (h *hcpStatusReconciler) reconcile(ctx context.Context, hcp *hyperv1.Hosted
 	// We check err in loop below to build conditions with ConditionUnknown status for all types.
 
 	if err == nil {
+		history := make([]hyperv1.ClusterUpdateHistory, len(clusterVersion.Status.History))
+		for i, h := range clusterVersion.Status.History {
+			history[i] = hyperv1.ClusterUpdateHistory{
+				State:          h.State,
+				StartedTime:    h.StartedTime,
+				CompletionTime: h.CompletionTime,
+				Version:        &h.Version,
+				Image:          &h.Image,
+			}
+		}
 		hcp.Status.VersionStatus = &hyperv1.ClusterVersionStatus{
 			Desired:            clusterVersion.Status.Desired,
-			History:            clusterVersion.Status.History,
-			ObservedGeneration: clusterVersion.Status.ObservedGeneration,
+			History:            history,
+			ObservedGeneration: &clusterVersion.Status.ObservedGeneration,
 			AvailableUpdates:   clusterVersion.Status.AvailableUpdates,
 			ConditionalUpdates: clusterVersion.Status.ConditionalUpdates,
 		}

@@ -3011,11 +3011,11 @@ func computeClusterVersionStatus(clock clock.WithTickerAndDelayedExecution, hclu
 			Desired: configv1.Release{
 				Image: releaseImage,
 			},
-			ObservedGeneration: hcluster.Generation,
-			History: []configv1.UpdateHistory{
+			ObservedGeneration: &hcluster.Generation,
+			History: []hyperv1.ClusterUpdateHistory{
 				{
 					State:       configv1.PartialUpdate,
-					Image:       releaseImage,
+					Image:       &releaseImage,
 					StartedTime: metav1.NewTime(clock.Now()),
 				},
 			},
@@ -3029,12 +3029,12 @@ func computeClusterVersionStatus(clock clock.WithTickerAndDelayedExecution, hclu
 	// partial history entry to unblock rollouts.
 	if releaseImage != hcluster.Status.Version.Desired.Image {
 		version.Desired.Image = releaseImage
-		version.ObservedGeneration = hcluster.Generation
+		version.ObservedGeneration = &hcluster.Generation
 		// TODO: leaky
-		version.History = append([]configv1.UpdateHistory{
+		version.History = append([]hyperv1.ClusterUpdateHistory{
 			{
 				State:       configv1.PartialUpdate,
-				Image:       releaseImage,
+				Image:       &releaseImage,
 				StartedTime: metav1.NewTime(clock.Now()),
 			},
 		}, version.History...)
@@ -3060,7 +3060,7 @@ func computeClusterVersionStatus(clock clock.WithTickerAndDelayedExecution, hclu
 	// The rollout is complete, so update the current history entry
 	version.History[0].State = configv1.CompletedUpdate
 	//lint:ignore SA1019 consume the deprecated property until we can drop compatibility with HostedControlPlane controllers that do not populate hcp.Status.VersionStatus.
-	version.History[0].Version = hcp.Status.Version
+	version.History[0].Version = &hcp.Status.Version
 	//lint:ignore SA1019 consume the deprecated property until we can drop compatibility with HostedControlPlane controllers that do not populate hcp.Status.VersionStatus.
 	if hcp.Status.LastReleaseImageTransitionTime != nil {
 		//lint:ignore SA1019 consume the deprecated property until we can drop compatibility with HostedControlPlane controllers that do not populate hcp.Status.VersionStatus.

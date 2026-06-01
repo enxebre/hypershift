@@ -351,7 +351,7 @@ func currentClusterVersion(hostedCluster *hyperv1.HostedCluster) string {
 		return ""
 	}
 
-	var latest *configv1.UpdateHistory
+	var latest *hyperv1.ClusterUpdateHistory
 	for i := range hostedCluster.Status.Version.History {
 		entry := &hostedCluster.Status.Version.History[i]
 		if entry.State != configv1.CompletedUpdate {
@@ -367,7 +367,7 @@ func currentClusterVersion(hostedCluster *hyperv1.HostedCluster) string {
 	}
 
 	if latest != nil {
-		return latest.Version
+		return ptr.Deref(latest.Version, "")
 	}
 
 	// If there are no completed entries but exactly one history entry exists, the cluster

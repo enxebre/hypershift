@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -120,7 +121,7 @@ func TestValidMinorVersionCompatibility(t *testing.T) {
 		},
 		Status: hyperv1.HostedClusterStatus{
 			Version: &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{},
+				History: []hyperv1.ClusterUpdateHistory{},
 			},
 		},
 	}
@@ -200,10 +201,10 @@ func TestValidMinorVersionCompatibility(t *testing.T) {
 
 			// Create a copy of the base HostedCluster and modify only the version
 			hc := baseHC.DeepCopy()
-			hc.Status.Version.History = []configv1.UpdateHistory{
+			hc.Status.Version.History = []hyperv1.ClusterUpdateHistory{
 				{
 					State:   configv1.CompletedUpdate,
-					Version: test.controlPlaneVersion,
+					Version: ptr.To(test.controlPlaneVersion),
 				},
 			}
 
@@ -234,18 +235,18 @@ func TestValidMinorVersionCompatibility(t *testing.T) {
 		g := NewWithT(t)
 
 		hc := baseHC.DeepCopy()
-		hc.Status.Version.History = []configv1.UpdateHistory{
+		hc.Status.Version.History = []hyperv1.ClusterUpdateHistory{
 			{
 				State:   configv1.CompletedUpdate,
-				Version: "4.18.0", // Newest - should be used
+				Version: ptr.To("4.18.0"), // Newest - should be used
 			},
 			{
 				State:   configv1.CompletedUpdate,
-				Version: "4.17.5",
+				Version: ptr.To("4.17.5"),
 			},
 			{
 				State:   configv1.CompletedUpdate,
-				Version: "4.17.0", // Oldest - should NOT be used
+				Version: ptr.To("4.17.0"), // Oldest - should NOT be used
 			},
 		}
 

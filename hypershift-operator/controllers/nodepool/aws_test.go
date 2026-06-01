@@ -12,7 +12,6 @@ import (
 	"github.com/openshift/hypershift/support/releaseinfo"
 	supportutil "github.com/openshift/hypershift/support/util"
 
-	configv1 "github.com/openshift/api/config/v1"
 	v1 "github.com/openshift/api/image/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -622,10 +621,10 @@ func TestValidateAWSPlatformConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			hostedcluster.Status.Version = &hyperv1.ClusterVersionStatus{
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
 						CompletionTime: &metav1.Time{},
-						Version:        tc.hostedClusterVersion,
+						Version:        ptr.To(tc.hostedClusterVersion),
 					},
 				},
 			}

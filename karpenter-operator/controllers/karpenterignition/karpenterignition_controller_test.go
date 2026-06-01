@@ -118,10 +118,10 @@ func TestReconcile(t *testing.T) {
 				Desired: configv1.Release{
 					Version: "4.17.0",
 				},
-				History: []configv1.UpdateHistory{
+				History: []hyperv1.ClusterUpdateHistory{
 					{
 						State:          configv1.CompletedUpdate,
-						Version:        "4.17.0",
+						Version:        ptr.To("4.17.0"),
 						CompletionTime: &metav1.Time{Time: time.Now()},
 					},
 				},
@@ -433,10 +433,10 @@ func TestReconcileVersionResolution(t *testing.T) {
 					Desired: configv1.Release{
 						Version: "4.17.0",
 					},
-					History: []configv1.UpdateHistory{
+					History: []hyperv1.ClusterUpdateHistory{
 						{
 							State:          configv1.CompletedUpdate,
-							Version:        "4.17.0",
+							Version:        ptr.To("4.17.0"),
 							CompletionTime: &metav1.Time{Time: time.Now()},
 						},
 					},
@@ -728,10 +728,10 @@ func TestResolveVersion(t *testing.T) {
 					Desired: configv1.Release{
 						Version: "4.17.0",
 					},
-					History: []configv1.UpdateHistory{
+					History: []hyperv1.ClusterUpdateHistory{
 						{
 							State:          configv1.CompletedUpdate,
-							Version:        "4.17.0",
+							Version:        ptr.To("4.17.0"),
 							CompletionTime: &metav1.Time{Time: time.Now()},
 						},
 					},
@@ -806,10 +806,10 @@ func TestResolveVersion(t *testing.T) {
 		hcp.Status.Version = "4.20.0"
 		hcp.Status.VersionStatus = &hyperv1.ClusterVersionStatus{
 			Desired: configv1.Release{Version: "4.20.0"},
-			History: []configv1.UpdateHistory{
+			History: []hyperv1.ClusterUpdateHistory{
 				{
 					State:          configv1.CompletedUpdate,
-					Version:        "4.20.0",
+					Version:        ptr.To("4.20.0"),
 					CompletionTime: &metav1.Time{Time: time.Now()},
 				},
 			},
@@ -855,10 +855,10 @@ func TestResolveVersion(t *testing.T) {
 		hcp.Status.Version = "invalid"
 		hcp.Status.VersionStatus = &hyperv1.ClusterVersionStatus{
 			Desired: configv1.Release{Version: "invalid"},
-			History: []configv1.UpdateHistory{
+			History: []hyperv1.ClusterUpdateHistory{
 				{
 					State:          configv1.CompletedUpdate,
-					Version:        "invalid",
+					Version:        ptr.To("invalid"),
 					CompletionTime: &metav1.Time{Time: time.Now()},
 				},
 			},
@@ -1008,10 +1008,10 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.17.0"},
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:          configv1.CompletedUpdate,
-								Version:        "4.17.0",
+								Version:        ptr.To("4.17.0"),
 								CompletionTime: &completedTime1,
 							},
 						},
@@ -1026,15 +1026,15 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.18.0"},
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:          configv1.CompletedUpdate,
-								Version:        "4.17.0",
+								Version:        ptr.To("4.17.0"),
 								CompletionTime: &completedTime1,
 							},
 							{
 								State:          configv1.CompletedUpdate,
-								Version:        "4.18.0",
+								Version:        ptr.To("4.18.0"),
 								CompletionTime: &completedTime2,
 							},
 						},
@@ -1049,14 +1049,14 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.18.0"},
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.PartialUpdate,
-								Version: "4.18.0",
+								Version: ptr.To("4.18.0"),
 							},
 							{
 								State:          configv1.CompletedUpdate,
-								Version:        "4.17.0",
+								Version:        ptr.To("4.17.0"),
 								CompletionTime: &completedTime1,
 							},
 						},
@@ -1071,10 +1071,10 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.17.0"},
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.PartialUpdate,
-								Version: "4.17.0",
+								Version: ptr.To("4.17.0"),
 							},
 						},
 					},
@@ -1088,14 +1088,14 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.18.0"},
-						History: []configv1.UpdateHistory{
+						History: []hyperv1.ClusterUpdateHistory{
 							{
 								State:   configv1.PartialUpdate,
-								Version: "4.18.0",
+								Version: ptr.To("4.18.0"),
 							},
 							{
 								State:   configv1.PartialUpdate,
-								Version: "4.17.0",
+								Version: ptr.To("4.17.0"),
 							},
 						},
 					},
@@ -1109,7 +1109,7 @@ func TestCurrentClusterVersion(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Version: "4.17.0"},
-						History: []configv1.UpdateHistory{},
+						History: []hyperv1.ClusterUpdateHistory{},
 					},
 				},
 			},
@@ -1332,10 +1332,10 @@ func TestReconcileKubeletConfigMapOrphanCleanup(t *testing.T) {
 					Desired: configv1.Release{
 						Version: "4.17.0",
 					},
-					History: []configv1.UpdateHistory{
+					History: []hyperv1.ClusterUpdateHistory{
 						{
 							State:          configv1.CompletedUpdate,
-							Version:        "4.17.0",
+							Version:        ptr.To("4.17.0"),
 							CompletionTime: &metav1.Time{Time: time.Now()},
 						},
 					},

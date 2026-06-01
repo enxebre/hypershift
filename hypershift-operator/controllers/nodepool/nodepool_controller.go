@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
 	capiaws "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiazure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -697,7 +698,7 @@ func (r *NodePoolReconciler) getHostedClusterVersion(ctx context.Context, hosted
 				continue
 			}
 
-			hostedClusterVersion, err := semver.Parse(version.Version)
+			hostedClusterVersion, err := semver.Parse(ptr.Deref(version.Version, ""))
 			if err != nil {
 				return nil, err
 			}

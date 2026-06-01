@@ -330,8 +330,8 @@ func TestReconcileHostedControlPlaneUpgrades(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Image: "a"},
-						History: []configv1.UpdateHistory{
-							{Image: "a", State: configv1.PartialUpdate},
+						History: []hyperv1.ClusterUpdateHistory{
+							{Image: ptr.To("a"), State: configv1.PartialUpdate},
 						},
 					},
 				},
@@ -352,8 +352,8 @@ func TestReconcileHostedControlPlaneUpgrades(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Image: "a"},
-						History: []configv1.UpdateHistory{
-							{Image: "a", State: configv1.CompletedUpdate},
+						History: []hyperv1.ClusterUpdateHistory{
+							{Image: ptr.To("a"), State: configv1.CompletedUpdate},
 						},
 					},
 				},
@@ -379,9 +379,9 @@ func TestReconcileHostedControlPlaneUpgrades(t *testing.T) {
 				Status: hyperv1.HostedClusterStatus{
 					Version: &hyperv1.ClusterVersionStatus{
 						Desired: configv1.Release{Image: "b"},
-						History: []configv1.UpdateHistory{
-							{Image: "b", State: configv1.PartialUpdate},
-							{Image: "a", State: configv1.CompletedUpdate},
+						History: []hyperv1.ClusterUpdateHistory{
+							{Image: ptr.To("b"), State: configv1.PartialUpdate},
+							{Image: ptr.To("a"), State: configv1.CompletedUpdate},
 						},
 					},
 				},

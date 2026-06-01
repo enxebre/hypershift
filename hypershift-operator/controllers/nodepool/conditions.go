@@ -946,11 +946,11 @@ func (r *NodePoolReconciler) supportedVersionSkewCondition(ctx context.Context, 
 	} else {
 		// If the cluster is installed or upgrading
 		// Start with the most recent version from history as the default
-		controlPlaneVersionStr = hcluster.Status.Version.History[0].Version
+		controlPlaneVersionStr = ptr.Deref(hcluster.Status.Version.History[0].Version, "")
 		// Find the most recent Completed version
 		for _, history := range hcluster.Status.Version.History {
 			if history.State == "Completed" {
-				controlPlaneVersionStr = history.Version
+				controlPlaneVersionStr = ptr.Deref(history.Version, "")
 				break
 			}
 		}

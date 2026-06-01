@@ -16,6 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -246,11 +247,11 @@ func validMinorVersionCompatibility(ctx context.Context, client crclient.Client,
 		// If the cluster is installed or upgrading
 		// History is ordered by recency with the newest update first (History[0])
 		// Use the most recent version from history as the default
-		controlPlaneVersionStr = hcluster.Status.Version.History[0].Version
+		controlPlaneVersionStr = ptr.Deref(hcluster.Status.Version.History[0].Version, "")
 		// If the most recent version is not Completed, find the most recent Completed version
 		for _, history := range hcluster.Status.Version.History {
 			if history.State == "Completed" {
-				controlPlaneVersionStr = history.Version
+				controlPlaneVersionStr = ptr.Deref(history.Version, "")
 				break
 			}
 		}
