@@ -25,6 +25,7 @@ tools/bin
 *~
 .vscode
 .envrc
+.env
 .DS_Store
 
 .kube
@@ -42,6 +43,10 @@ tools/bin
 
 # Mocked interface generate through mockgen
 *_mock.go
+
+# Claude Code working directory
+.work/
+.claude/worktrees/
 
 # dev
 /dev/

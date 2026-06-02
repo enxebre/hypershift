@@ -6,8 +6,8 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	haproxy "github.com/openshift/hypershift/hypershift-operator/controllers/nodepool/apiserver-haproxy"
+	"github.com/openshift/hypershift/support/podspec"
 	"github.com/openshift/hypershift/support/releaseinfo"
-	"github.com/openshift/hypershift/support/util"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -59,7 +59,7 @@ func (f *FakeReleaseProvider) Lookup(_ context.Context, image string, _ []byte) 
 						From: &corev1.ObjectReference{Name: ""},
 					},
 					{
-						Name: util.AvailabilityProberImageName,
+						Name: podspec.AvailabilityProberImageName,
 						From: &corev1.ObjectReference{Name: ""},
 					},
 					{
@@ -82,7 +82,8 @@ func (f *FakeReleaseProvider) Lookup(_ context.Context, image string, _ []byte) 
 							},
 						},
 						GCP: releaseinfo.CoreOSGCPImage{
-							Image: "projects/rhcos-cloud/global/images/rhcos-x86-64-fake",
+							Project: "rhcos-cloud",
+							Name:    "rhcos-x86-64-fake",
 						},
 					},
 				},
@@ -101,7 +102,8 @@ func (f *FakeReleaseProvider) Lookup(_ context.Context, image string, _ []byte) 
 							},
 						},
 						GCP: releaseinfo.CoreOSGCPImage{
-							Image: "projects/rhcos-cloud/global/images/rhcos-aarch64-fake",
+							Project: "rhcos-cloud",
+							Name:    "rhcos-aarch64-fake",
 						},
 					},
 				},

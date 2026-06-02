@@ -1,6 +1,7 @@
 package kas
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -59,6 +60,184 @@ wGfTN9G6sx4vuPjXe8NlEZMJ1eE8pDnIUvQZD8RzL/9EksQeTu7ofNn2KC9J7pfn
 MlubpsoEK2bYQDZskgDGCHI=
 -----END CERTIFICATE-----
 `
+
+func TestGenerateAuthConfig(t *testing.T) {
+	type testCase struct {
+		name                                string
+		ctx                                 context.Context
+		spec                                *configv1.AuthenticationSpec
+		client                              crclient.Reader
+		namespace                           string
+		expectedAuthenticationConfiguration *AuthenticationConfiguration
+		shouldError                         bool
+		featureGates                        []featuregate.Feature
+	}
+
+	testCases := []testCase{
+		{
+			name:        "When authentication spec is nil, it should return an error",
+			ctx:         context.Background(),
+			spec:        nil,
+			client:      nil,
+			namespace:   "test",
+			shouldError: true,
+		},
+		{
+			name: "When valid OIDC provider is provided, it should generate valid authentication configuration",
+			ctx:  context.Background(),
+			spec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test-provider",
+						Issuer: configv1.TokenIssuer{
+							URL: "https://test.example.com",
+							Audiences: []configv1.TokenAudience{
+								"test-audience",
+							},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Claim:        "email",
+								PrefixPolicy: configv1.NoPrefix,
+							},
+						},
+					},
+				},
+			},
+			client:    fake.NewClientBuilder().Build(),
+			namespace: "test-namespace",
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{
+					{
+						Issuer: Issuer{
+							URL:                 "https://test.example.com",
+							AudienceMatchPolicy: AudienceMatchPolicyMatchAny,
+							Audiences:           []string{"test-audience"},
+						},
+						ClaimMappings: ClaimMappings{
+							Username: PrefixedClaimOrExpression{
+								Prefix: ptr.To(""),
+								Claim:  "email",
+							},
+							Groups: PrefixedClaimOrExpression{
+								Prefix: ptr.To(""),
+								Claim:  "",
+							},
+							UID: ClaimOrExpression{
+								Claim: "sub",
+							},
+							Extra: []ExtraMapping{},
+						},
+						ClaimValidationRules: []ClaimValidationRule{},
+					},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "When OIDC provider with CEL validation is provided, it should generate configuration with validation rules",
+			ctx:  context.Background(),
+			spec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test-provider",
+						Issuer: configv1.TokenIssuer{
+							URL: "https://test.example.com",
+							Audiences: []configv1.TokenAudience{
+								"test-audience",
+							},
+						},
+						ClaimValidationRules: []configv1.TokenClaimValidationRule{
+							{
+								Type: configv1.TokenValidationRuleTypeCEL,
+								CEL: configv1.TokenClaimValidationCELRule{
+									Expression: "claims.email_verified == true",
+									Message:    "email must be verified",
+								},
+							},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Expression: "claims.email",
+							},
+						},
+					},
+				},
+			},
+			client:    fake.NewClientBuilder().Build(),
+			namespace: "test-namespace",
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{
+					{
+						Issuer: Issuer{
+							URL:                 "https://test.example.com",
+							AudienceMatchPolicy: AudienceMatchPolicyMatchAny,
+							Audiences:           []string{"test-audience"},
+						},
+						ClaimMappings: ClaimMappings{
+							Username: PrefixedClaimOrExpression{
+								Expression: "claims.email",
+							},
+							Groups: PrefixedClaimOrExpression{
+								Prefix: ptr.To(""),
+								Claim:  "",
+							},
+							UID: ClaimOrExpression{
+								Claim: "sub",
+							},
+							Extra: []ExtraMapping{},
+						},
+						ClaimValidationRules: []ClaimValidationRule{
+							{
+								Expression: "claims.email_verified == true",
+								Message:    "email must be verified",
+							},
+						},
+						UserValidationRules: []UserValidationRule{},
+					},
+				},
+			},
+			shouldError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.featureGates) > 0 {
+				for _, feature := range tc.featureGates {
+					fgtesting.SetFeatureGateDuringTest(t, featuregates.Gate(), feature, true)
+				}
+			}
+
+			actualConfig, err := GenerateAuthConfig(tc.ctx, tc.spec, tc.client, tc.namespace)
+
+			switch {
+			case tc.shouldError && err == nil:
+				t.Fatal("expected an error to have occurred but got none")
+			case !tc.shouldError && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case tc.shouldError && err != nil:
+				// as expected
+				return
+			}
+
+			if diff := cmp.Diff(tc.expectedAuthenticationConfiguration, actualConfig); diff != "" {
+				t.Fatalf("actual authentication configuration does not match expected (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestAdaptAuthConfig(t *testing.T) {
 	type testCase struct {
@@ -973,6 +1152,547 @@ func TestAdaptAuthConfig(t *testing.T) {
 						ClaimValidationRules: []configv1.TokenClaimValidationRule{
 							{
 								Type: "Invalid",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (http instead of https)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							DiscoveryURL: "http://insecure-url.com",
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (identical to issuer URL)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://issuer.example.com",
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (identical to issuer URL except trailing slash)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://issuer.example.com/",
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (missing host)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://path", // missing host
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (contains user info)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://user@discovery.example.com/path", // contains user info
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (contains query string)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://discovery.example.com/path?q=1", // contains query string
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (contains fragment)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://discovery.example.com/path#fragment", // contains fragment
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "invalid discovery URL (parse error)",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:          "https://issuer.example.com",
+							DiscoveryURL: "https://%zz", // parse error
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "authn spec provided, username expression set with claims.email and claims.email_verified in claimValidationRule, no error, successful mapping",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{
+					{
+						Issuer: Issuer{
+							URL:                 "https://test.com",
+							AudienceMatchPolicy: AudienceMatchPolicyMatchAny,
+							Audiences:           []string{"one", "two"},
+						},
+						ClaimMappings: ClaimMappings{
+							Username: PrefixedClaimOrExpression{
+								Expression: "claims.email",
+							},
+							Groups: PrefixedClaimOrExpression{
+								Prefix: ptr.To(""),
+								Claim:  "",
+							},
+							UID:   ClaimOrExpression{Claim: "sub"},
+							Extra: []ExtraMapping{},
+						},
+						ClaimValidationRules: []ClaimValidationRule{
+							{
+								Expression: "claims.email_verified == true",
+								Message:    "email must be verified",
+							},
+						},
+					},
+				},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Expression: "claims.email",
+							},
+						},
+						ClaimValidationRules: []configv1.TokenClaimValidationRule{
+							{
+								Type: configv1.TokenValidationRuleTypeCEL,
+								CEL: configv1.TokenClaimValidationCELRule{
+									Expression: "claims.email_verified == true",
+									Message:    "email must be verified",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name:   "authn spec provided, username expression and prefix policy set to Prefix, error",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Expression:   "claims.sub",
+								PrefixPolicy: configv1.Prefix,
+								Prefix: &configv1.UsernamePrefix{
+									PrefixString: "oidc-user:",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "authn spec provided, groups expression and prefix set, error",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								PrefixPolicy: configv1.NoOpinion,
+								Claim:        "username",
+							},
+							Groups: configv1.PrefixedClaimMapping{
+								TokenClaimMapping: configv1.TokenClaimMapping{
+									Expression: "claims.groups",
+								},
+								Prefix: "oidc-group:",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "authn spec provided, groups expression set, no error, successful mapping",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{
+					{
+						Issuer: Issuer{
+							URL:                 "https://test.com",
+							AudienceMatchPolicy: AudienceMatchPolicyMatchAny,
+							Audiences:           []string{"one", "two"},
+						},
+						ClaimMappings: ClaimMappings{
+							Username: PrefixedClaimOrExpression{
+								Prefix: ptr.To("https://test.com#"),
+								Claim:  "username",
+							},
+							Groups: PrefixedClaimOrExpression{
+								Expression: "claims.groups",
+							},
+							UID:   ClaimOrExpression{Claim: "sub"},
+							Extra: []ExtraMapping{},
+						},
+						ClaimValidationRules: []ClaimValidationRule{},
+					},
+				},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								PrefixPolicy: configv1.NoOpinion,
+								Claim:        "username",
+							},
+							Groups: configv1.PrefixedClaimMapping{
+								TokenClaimMapping: configv1.TokenClaimMapping{
+									Expression: "claims.groups",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name:   "authn spec provided, username claim and expression both set, error",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Claim:      "username",
+								Expression: "claims.email",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "authn spec provided, groups claim and expression both set, error",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								PrefixPolicy: configv1.NoOpinion,
+								Claim:        "username",
+							},
+							Groups: configv1.PrefixedClaimMapping{
+								TokenClaimMapping: configv1.TokenClaimMapping{
+									Claim:      "groups",
+									Expression: "claims.groups",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "user validation rule invalid expression",
+			client: fake.NewClientBuilder().Build(),
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			expectedAuthenticationConfiguration: &AuthenticationConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apiserver.config.k8s.io/v1alpha1",
+					Kind:       "AuthenticationConfiguration",
+				},
+				JWT: []JWTAuthenticator{},
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL: "https://issuer.example.com",
+							Audiences: []configv1.TokenAudience{
+								"one",
+								"two",
+							},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								PrefixPolicy: configv1.NoOpinion,
+								Claim:        "username",
+							},
+						},
+						UserValidationRules: []configv1.TokenUserValidationRule{
+							{
+								Expression: "", // invalid: empty expression
+								Message:    "must have a valid expression",
+							},
+						},
+					},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:   "authn spec provided, username expression uses claims.email without claims.email_verified, error",
+			client: nil,
+			featureGates: []featuregate.Feature{
+				featuregates.ExternalOIDCWithUpstreamParity,
+			},
+			hcpAuthenticationSpec: &configv1.AuthenticationSpec{
+				OIDCProviders: []configv1.OIDCProvider{
+					{
+						Name: "test",
+						Issuer: configv1.TokenIssuer{
+							URL:       "https://test.com",
+							Audiences: []configv1.TokenAudience{"one", "two"},
+						},
+						ClaimMappings: configv1.TokenClaimMappings{
+							Username: configv1.UsernameClaimMapping{
+								Expression: "claims.email",
 							},
 						},
 					},

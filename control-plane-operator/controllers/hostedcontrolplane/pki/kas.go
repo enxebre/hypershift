@@ -8,7 +8,7 @@ import (
 	"github.com/openshift/hypershift/support/certs"
 	"github.com/openshift/hypershift/support/config"
 	supportpki "github.com/openshift/hypershift/support/pki"
-	"github.com/openshift/hypershift/support/util"
+	"github.com/openshift/hypershift/support/podspec"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
@@ -69,13 +69,21 @@ func ReconcileHCCOClientCertSecret(secret, ca *corev1.Secret, ownerRef config.Ow
 	return reconcileSignedCert(secret, ca, ownerRef, fmt.Sprintf("system:%s", config.HCCOUser), []string{"kubernetes", "system:serviceaccounts:openshift"}, X509UsageClientAuth)
 }
 
+func ReconcileKASBootstrapContainerClientCertSecret(secret, ca *corev1.Secret, ownerRef config.OwnerRef) error {
+	return reconcileSignedCert(secret, ca, ownerRef, fmt.Sprintf("system:%s", config.KASBootstrapContainerUser), []string{"kubernetes"}, X509UsageClientAuth)
+}
+
 func ReconcileServiceAccountKubeconfig(secret, csrSigner *corev1.Secret, ca *corev1.ConfigMap, hcp *hyperv1.HostedControlPlane, serviceAccountNamespace, serviceAccountName string) error {
+	svcURL := inClusterKASURL(hcp.Spec.Platform.Type)
+	return ReconcileServiceAccountKubeconfigWithURL(secret, csrSigner, ca, serviceAccountNamespace, serviceAccountName, svcURL)
+}
+
+func ReconcileServiceAccountKubeconfigWithURL(secret, csrSigner *corev1.Secret, ca *corev1.ConfigMap, serviceAccountNamespace, serviceAccountName, kubeconfigURL string) error {
 	cn := serviceaccount.MakeUsername(serviceAccountNamespace, serviceAccountName)
 	if err := reconcileSignedCert(secret, csrSigner, config.OwnerRef{}, cn, serviceaccount.MakeGroupNames(serviceAccountNamespace), X509UsageClientAuth); err != nil {
 		return fmt.Errorf("failed to reconcile serviceaccount client cert: %w", err)
 	}
-	svcURL := inClusterKASURL(hcp.Spec.Platform.Type)
-	return ReconcileKubeConfig(secret, secret, ca, svcURL, "", manifests.KubeconfigScopeLocal, config.OwnerRef{})
+	return ReconcileKubeConfig(secret, secret, ca, kubeconfigURL, "", manifests.KubeconfigScopeLocal, config.OwnerRef{})
 }
 
 func ReconcileKubeConfig(secret, cert *corev1.Secret, ca *corev1.ConfigMap, url string, key string, scope manifests.KubeconfigScope, ownerRef config.OwnerRef) error {
@@ -90,7 +98,7 @@ func ReconcileKubeConfig(secret, cert *corev1.Secret, ca *corev1.ConfigMap, url 
 		secret.Data = map[string][]byte{}
 	}
 	if key == "" {
-		key = util.KubeconfigKey
+		key = podspec.KubeconfigKey
 	}
 	if secret.Labels == nil {
 		secret.Labels = map[string]string{}

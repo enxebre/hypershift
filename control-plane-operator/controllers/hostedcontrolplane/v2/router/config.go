@@ -9,9 +9,10 @@ import (
 
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/ignitionserver"
+	"github.com/openshift/hypershift/support/azureutil"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
-	"github.com/openshift/hypershift/support/util"
+	"github.com/openshift/hypershift/support/netutil"
 
 	routev1 "github.com/openshift/api/route/v1"
 
@@ -60,7 +61,16 @@ func adaptConfig(cpContext component.WorkloadContext, cm *corev1.ConfigMap) erro
 		svcsNameToIP[route.Spec.To.Name] = svc.Spec.ClusterIP
 	}
 
-	routerConfig, err := generateRouterConfig(routeList, svcsNameToIP)
+	var keyVaultFQDN string
+	if azureutil.IsAroHCP() && azureutil.IsPrivateKeyVault(cpContext.HCP) {
+		kvFQDN, err := azureutil.GetKeyVaultFQDN(cpContext.HCP)
+		if err != nil {
+			return fmt.Errorf("failed to get Key Vault FQDN: %w", err)
+		}
+		keyVaultFQDN = kvFQDN
+	}
+
+	routerConfig, err := generateRouterConfig(routeList, svcsNameToIP, keyVaultFQDN)
 	if err != nil {
 		return err
 	}
@@ -74,7 +84,7 @@ func (r byRouteName) Len() int           { return len(r) }
 func (r byRouteName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byRouteName) Less(i, j int) bool { return r[i].Name < r[j].Name }
 
-func generateRouterConfig(routeList *routev1.RouteList, svcsNameToIP map[string]string) (string, error) {
+func generateRouterConfig(routeList *routev1.RouteList, svcsNameToIP map[string]string, keyVaultFQDN string) (string, error) {
 	type backendDesc struct {
 		Name                 string
 		HostName             string
@@ -86,11 +96,17 @@ func generateRouterConfig(routeList *routev1.RouteList, svcsNameToIP map[string]
 		KASSVCPort              int32
 		KASDestinationServiceIP string
 		Backends                []backendDesc
+		HasPrivateKeyVault      bool
+		KeyVaultFQDN            string
 	}
 	p := templateParams{}
+	if keyVaultFQDN != "" {
+		p.HasPrivateKeyVault = true
+		p.KeyVaultFQDN = keyVaultFQDN
+	}
 	sort.Sort(byRouteName(routeList.Items))
 	for _, route := range routeList.Items {
-		if _, hasHCPLabel := route.Labels[util.HCPRouteLabel]; !hasHCPLabel {
+		if _, hasHCPLabel := route.Labels[netutil.HCPRouteLabel]; !hasHCPLabel {
 			// If the hypershift.openshift.io/hosted-control-plane label is not present,
 			// then it means the route should be fulfilled by the management cluster's router.
 			continue
@@ -115,6 +131,8 @@ func generateRouterConfig(routeList *routev1.RouteList, svcsNameToIP map[string]
 			p.Backends = append(p.Backends, backendDesc{Name: "oauth_internal", HostName: route.Spec.Host, DestinationServiceIP: svcsNameToIP[route.Spec.To.Name], DestinationPort: 6443})
 		case manifests.MetricsForwarderRoute("").Name:
 			p.Backends = append(p.Backends, backendDesc{Name: "metrics_forwarder", HostName: route.Spec.Host, DestinationServiceIP: svcsNameToIP[route.Spec.To.Name], DestinationPort: route.Spec.Port.TargetPort.IntVal})
+		case manifests.MetricsProxyRoute("").Name:
+			p.Backends = append(p.Backends, backendDesc{Name: "metrics_proxy", HostName: route.Spec.Host, DestinationServiceIP: svcsNameToIP[route.Spec.To.Name], DestinationPort: 443})
 		}
 	}
 

@@ -16,8 +16,10 @@ import (
 	"github.com/openshift/hypershift/hypershift-operator/controllers/nodepool/kubevirt"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/sharedingress"
 	kvinfra "github.com/openshift/hypershift/kubevirtexternalinfra"
+	"github.com/openshift/hypershift/support/awsapi"
 	"github.com/openshift/hypershift/support/capabilities"
 	"github.com/openshift/hypershift/support/images"
+	"github.com/openshift/hypershift/support/k8sutil"
 	"github.com/openshift/hypershift/support/releaseinfo"
 	"github.com/openshift/hypershift/support/supportedversion"
 	"github.com/openshift/hypershift/support/upsert"
@@ -25,8 +27,6 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	agentv1 "github.com/openshift/cluster-api-provider-agent/api/v1beta1"
-
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -98,7 +98,7 @@ type NodePoolReconciler struct {
 	HypershiftOperatorImage string
 	ImageMetadataProvider   supportutil.ImageMetadataProvider
 	KubevirtInfraClients    kvinfra.KubevirtInfraClientMap
-	EC2Client               ec2iface.EC2API
+	EC2Client               awsapi.EC2API
 	InstanceTypeProvider    instancetype.Provider
 }
 
@@ -170,7 +170,7 @@ func (r *NodePoolReconciler) managedResources() []client.Object {
 
 	if platformsInstalled := os.Getenv("PLATFORMS_INSTALLED"); len(platformsInstalled) > 0 {
 		// Watch based on platforms installed
-		managedResources = append(managedResources, supportutil.GetNodePoolManagedResources(platformsInstalled)...)
+		managedResources = append(managedResources, k8sutil.GetNodePoolManagedResources(platformsInstalled)...)
 	} else {
 		// Watch all CAPI platform related resources
 		managedResources = append(managedResources, capiRelatedNodePoolManagedResourcesToWatch...)
@@ -181,7 +181,6 @@ func (r *NodePoolReconciler) managedResources() []client.Object {
 
 func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("Reconciling")
 
 	// Fetch the nodePool instance
 	nodePool := &hyperv1.NodePool{}
@@ -254,6 +253,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return result, nil
 }
 
+//nolint:gocyclo
 func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.HostedCluster, nodePool *hyperv1.NodePool) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -273,6 +273,13 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 	// Get HostedCluster deps.
 	controlPlaneNamespace := manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name)
 	infraID := hcluster.Spec.InfraID
+
+	// Aggregate node version and health information into NodesInfo status.
+	// This is done before the conditions loop so that nodesInfo stays accurate
+	// even when later validations (e.g. release image) short-circuit the reconcile.
+	if err := r.setNodesInfoStatus(ctx, nodePool); err != nil {
+		log.Error(err, "Failed to set NodesInfo status")
+	}
 
 	// Loop over all conditions.
 	// Order matter as conditions might choose to short circuit returning ctrl.Result or error.
@@ -663,12 +670,13 @@ func (r *NodePoolReconciler) getReleaseImage(ctx context.Context, hostedCluster 
 		return nil, err
 	}
 
-	var currentVersionParsed semver.Version
+	var currentVersionParsed *semver.Version
 	if currentVersion != "" {
-		currentVersionParsed, err = semver.Parse(currentVersion)
+		parsed, err := semver.Parse(currentVersion)
 		if err != nil {
 			return nil, err
 		}
+		currentVersionParsed = &parsed
 	}
 
 	minSupportedVersion := supportedversion.GetMinSupportedVersion(hostedCluster)
@@ -678,7 +686,7 @@ func (r *NodePoolReconciler) getReleaseImage(ctx context.Context, hostedCluster 
 		return nil, err
 	}
 
-	return ReleaseImage, supportedversion.IsValidReleaseVersion(&wantedVersion, &currentVersionParsed, hostedClusterVersion, &minSupportedVersion, hostedCluster.Spec.Networking.NetworkType, hostedCluster.Spec.Platform.Type)
+	return ReleaseImage, supportedversion.IsValidReleaseVersion(&wantedVersion, currentVersionParsed, hostedClusterVersion, &minSupportedVersion, hostedCluster.Spec.Networking.NetworkType, hostedCluster.Spec.Platform.Type)
 }
 
 func (r *NodePoolReconciler) getHostedClusterVersion(ctx context.Context, hostedCluster *hyperv1.HostedCluster, pullSecretBytes []byte) (*semver.Version, error) {
@@ -726,6 +734,9 @@ func isAutoscalingEnabled(nodePool *hyperv1.NodePool) bool {
 }
 
 func defaultNodePoolAMI(region string, specifiedArch string, releaseImage *releaseinfo.ReleaseImage) (string, error) {
+	if releaseImage.StreamMetadata == nil {
+		return "", fmt.Errorf("release image stream metadata is nil")
+	}
 	arch, foundArch := releaseImage.StreamMetadata.Architectures[hyperv1.ArchAliases[specifiedArch]]
 	if !foundArch {
 		return "", fmt.Errorf("couldn't find OS metadata for architecture %q", specifiedArch)
@@ -755,10 +766,10 @@ func defaultNodePoolGCPImage(specifiedArch string, releaseImage *releaseinfo.Rel
 		return "", fmt.Errorf("couldn't find OS metadata for architecture %q", specifiedArch)
 	}
 
-	if len(arch.Images.GCP.Image) == 0 {
+	if len(arch.Images.GCP.Project) == 0 || len(arch.Images.GCP.Name) == 0 {
 		return "", fmt.Errorf("release image metadata has no GCP image for architecture %q", specifiedArch)
 	}
-	return arch.Images.GCP.Image, nil
+	return fmt.Sprintf("projects/%s/global/images/%s", arch.Images.GCP.Project, arch.Images.GCP.Name), nil
 }
 
 // MachineDeploymentComplete considers a MachineDeployment to be complete once all of its desired replicas
@@ -897,7 +908,7 @@ func (r *NodePoolReconciler) getNodePoolNamespacedName(nodePoolName string, cont
 	}); err != nil || len(hcpList.Items) < 1 {
 		return types.NamespacedName{Name: nodePoolName}, err
 	}
-	hostedCluster, ok := hcpList.Items[0].Annotations[supportutil.HostedClusterAnnotation]
+	hostedCluster, ok := hcpList.Items[0].Annotations[k8sutil.HostedClusterAnnotation]
 	if !ok {
 		return types.NamespacedName{Name: nodePoolName}, fmt.Errorf("failed to get Hosted Cluster name for HostedControlPlane %s", hcpList.Items[0].Name)
 	}
@@ -1085,8 +1096,13 @@ func sortedByCreationTimestamp(machines []*capiv1.Machine) []*capiv1.Machine {
 
 const (
 	endOfMessage                         = "... too many similar errors\n"
+	endOfGlobalMessage                   = "... message truncated\n"
+	endOfReasons                         = ",ReasonsTruncated"
 	maxMessageLength                     = 1000
+	maxGlobalMessageLength               = 3000
+	maxReasonLength                      = 1024 // +kubebuilder:validation:MaxLength on NodePoolCondition.Reason
 	aggregatorMachineStateReady          = "ready"
+	aggregatorMachineStateHealthy        = "healthy"
 	aggregatorMachineStateLiveMigratable = "live migratable"
 )
 
@@ -1107,10 +1123,46 @@ func aggregateMachineReasonsAndMessages(messageMap map[string][]string, numMachi
 	sort.Strings(reasons)
 
 	for _, reason := range reasons {
-		msgBuilder.WriteString(aggregateMachineMessages(messageMap[reason]))
+		// Sort messages within each reason bucket to ensure deterministic output
+		// regardless of Kubernetes list order, avoiding unnecessary status updates.
+		sort.Strings(messageMap[reason])
+		reasonBlock := aggregateMachineMessages(messageMap[reason])
+		if msgBuilder.Len()+len(reasonBlock)+len(endOfGlobalMessage) > maxGlobalMessageLength {
+			msgBuilder.WriteString(endOfGlobalMessage)
+			break
+		}
+		msgBuilder.WriteString(reasonBlock)
 	}
 
-	return strings.Join(reasons, ","), msgBuilder.String()
+	return truncateReasons(reasons), msgBuilder.String()
+}
+
+// truncateReasons joins reasons with commas and truncates the result to fit
+// within the NodePoolCondition.Reason MaxLength=1024 validation limit.
+// When truncation occurs, the suffix ",ReasonsTruncated" is appended.
+func truncateReasons(reasons []string) string {
+	joined := strings.Join(reasons, ",")
+	if len(joined) <= maxReasonLength {
+		return joined
+	}
+
+	// Build the truncated reason string by adding reasons one at a time,
+	// reserving space for the endOfReasons suffix.
+	builder := strings.Builder{}
+	for i, reason := range reasons {
+		separator := ""
+		if i > 0 {
+			separator = ","
+		}
+		if builder.Len()+len(separator)+len(reason)+len(endOfReasons) > maxReasonLength {
+			builder.WriteString(endOfReasons)
+			break
+		}
+		builder.WriteString(separator)
+		builder.WriteString(reason)
+	}
+
+	return builder.String()
 }
 
 func aggregateMachineMessages(msgs []string) string {
@@ -1137,7 +1189,7 @@ func deleteConfigByLabel(ctx context.Context, c client.Client, lbl map[string]st
 	}
 	for i := range cmList.Items {
 		cm := &cmList.Items[i]
-		if _, err := supportutil.DeleteIfNeeded(ctx, c, cm); err != nil {
+		if _, err := k8sutil.DeleteIfNeeded(ctx, c, cm); err != nil {
 			return err
 		}
 	}

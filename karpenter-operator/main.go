@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	hypershiftclient "github.com/openshift/hypershift/client/clientset/clientset"
 	"github.com/openshift/hypershift/karpenter-operator/controllers/karpenter"
 	"github.com/openshift/hypershift/karpenter-operator/controllers/karpenterignition"
 	"github.com/openshift/hypershift/karpenter-operator/controllers/nodeclass"
@@ -118,10 +119,16 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("failed to add managementCluster to controller runtime manager: %v", err)
 	}
 
+	hypershiftClient, err := hypershiftclient.NewForConfig(managementKubeconfig)
+	if err != nil {
+		return fmt.Errorf("failed to create hypershift client: %w", err)
+	}
+
 	r := karpenter.Reconciler{
 		Namespace:                 namespace,
 		ControlPlaneOperatorImage: controlPlaneOperatorImage,
 		ReleaseProvider:           &releaseinfo.RegistryClientProvider{},
+		HypershiftClient:          hypershiftClient,
 	}
 	if err := r.SetupWithManager(ctx, mgr, managementCluster); err != nil {
 		return fmt.Errorf("failed to setup controller with manager: %w", err)
@@ -170,6 +177,7 @@ func run(ctx context.Context) error {
 
 	kir := karpenterignition.KarpenterIgnitionReconciler{
 		ReleaseProvider:         releaseProvider,
+		VersionResolver:         releaseinfo.NewCincinnatiVersionResolver(),
 		ImageMetadataProvider:   imageMetaDataProvider,
 		HypershiftOperatorImage: hypershiftOperatorImage,
 		IgnitionEndpoint:        ignitionEndpoint,

@@ -21,13 +21,13 @@ import (
 	v1alpha1 "github.com/openshift/hypershift/api/auditlogpersistence/v1alpha1"
 	certificatesv1alpha1 "github.com/openshift/hypershift/api/certificates/v1alpha1"
 	v1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	karpenterv1beta1 "github.com/openshift/hypershift/api/karpenter/v1beta1"
+	v1 "github.com/openshift/hypershift/api/karpenter/v1"
 	schedulingv1alpha1 "github.com/openshift/hypershift/api/scheduling/v1alpha1"
 	auditlogpersistencev1alpha1 "github.com/openshift/hypershift/client/applyconfiguration/auditlogpersistence/v1alpha1"
 	applyconfigurationcertificatesv1alpha1 "github.com/openshift/hypershift/client/applyconfiguration/certificates/v1alpha1"
 	hypershiftv1beta1 "github.com/openshift/hypershift/client/applyconfiguration/hypershift/v1beta1"
 	internal "github.com/openshift/hypershift/client/applyconfiguration/internal"
-	applyconfigurationkarpenterv1beta1 "github.com/openshift/hypershift/client/applyconfiguration/karpenter/v1beta1"
+	karpenterv1 "github.com/openshift/hypershift/client/applyconfiguration/karpenter/v1"
 	applyconfigurationschedulingv1alpha1 "github.com/openshift/hypershift/client/applyconfiguration/scheduling/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -79,6 +79,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.APIServerNetworkingApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AutoNode"):
 		return &hypershiftv1beta1.AutoNodeApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AutoNodeStatus"):
+		return &hypershiftv1beta1.AutoNodeStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AWSCloudProviderConfig"):
 		return &hypershiftv1beta1.AWSCloudProviderConfigApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AWSKMSAuthSpec"):
@@ -119,6 +121,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.AzureNodePoolPlatformApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AzurePlatformSpec"):
 		return &hypershiftv1beta1.AzurePlatformSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AzurePrivateLinkService"):
+		return &hypershiftv1beta1.AzurePrivateLinkServiceApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AzurePrivateLinkServiceSpec"):
+		return &hypershiftv1beta1.AzurePrivateLinkServiceSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AzurePrivateLinkServiceStatus"):
+		return &hypershiftv1beta1.AzurePrivateLinkServiceStatusApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AzurePrivateLinkSpec"):
+		return &hypershiftv1beta1.AzurePrivateLinkSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("AzurePrivateSpec"):
+		return &hypershiftv1beta1.AzurePrivateSpecApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AzureResourceManagedIdentities"):
 		return &hypershiftv1beta1.AzureResourceManagedIdentitiesApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("AzureVMImage"):
@@ -149,6 +161,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.ConfigurationStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ControlPlaneManagedIdentities"):
 		return &hypershiftv1beta1.ControlPlaneManagedIdentitiesApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("ControlPlaneUpdateHistory"):
+		return &hypershiftv1beta1.ControlPlaneUpdateHistoryApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("ControlPlaneVersionStatus"):
+		return &hypershiftv1beta1.ControlPlaneVersionStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("DataPlaneManagedIdentities"):
 		return &hypershiftv1beta1.DataPlaneManagedIdentitiesApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("Diagnostics"):
@@ -191,6 +207,30 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.GCPServiceAccountsEmailsApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("GCPWorkloadIdentityConfig"):
 		return &hypershiftv1beta1.GCPWorkloadIdentityConfigApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackup"):
+		return &hypershiftv1beta1.HCPEtcdBackupApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupAzureBlob"):
+		return &hypershiftv1beta1.HCPEtcdBackupAzureBlobApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfig"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfigAWS"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigAWSApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupConfigAzure"):
+		return &hypershiftv1beta1.HCPEtcdBackupConfigAzureApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadata"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadataAWS"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataAWSApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupEncryptionMetadataAzure"):
+		return &hypershiftv1beta1.HCPEtcdBackupEncryptionMetadataAzureApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupS3"):
+		return &hypershiftv1beta1.HCPEtcdBackupS3ApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupSpec"):
+		return &hypershiftv1beta1.HCPEtcdBackupSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupStatus"):
+		return &hypershiftv1beta1.HCPEtcdBackupStatusApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("HCPEtcdBackupStorage"):
+		return &hypershiftv1beta1.HCPEtcdBackupStorageApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("HostedCluster"):
 		return &hypershiftv1beta1.HostedClusterApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("HostedClusterSpec"):
@@ -283,6 +323,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.NodePoolConditionApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolManagement"):
 		return &hypershiftv1beta1.NodePoolManagementApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("NodePoolNodesInfo"):
+		return &hypershiftv1beta1.NodePoolNodesInfoApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolPlatform"):
 		return &hypershiftv1beta1.NodePoolPlatformApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePoolPlatformStatus"):
@@ -293,6 +335,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.NodePoolStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NodePortPublishingStrategy"):
 		return &hypershiftv1beta1.NodePortPublishingStrategyApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("NodeVersion"):
+		return &hypershiftv1beta1.NodeVersionApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackIdentityReference"):
 		return &hypershiftv1beta1.OpenStackIdentityReferenceApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackNodePoolPlatform"):
@@ -341,12 +385,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &hypershiftv1beta1.ScaleDownConfigApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SecretEncryptionSpec"):
 		return &hypershiftv1beta1.SecretEncryptionSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("SecretReference"):
+		return &hypershiftv1beta1.SecretReferenceApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServiceNetworkEntry"):
 		return &hypershiftv1beta1.ServiceNetworkEntryApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServicePublishingStrategy"):
 		return &hypershiftv1beta1.ServicePublishingStrategyApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ServicePublishingStrategyMapping"):
 		return &hypershiftv1beta1.ServicePublishingStrategyMappingApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("SpotOptions"):
+		return &hypershiftv1beta1.SpotOptionsApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SubnetFilter"):
 		return &hypershiftv1beta1.SubnetFilterApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("SubnetParam"):
@@ -364,25 +412,33 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	case v1beta1.SchemeGroupVersion.WithKind("WorkloadIdentity"):
 		return &hypershiftv1beta1.WorkloadIdentityApplyConfiguration{}
 
-		// Group=karpenter.hypershift.openshift.io, Version=v1beta1
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("BlockDevice"):
-		return &applyconfigurationkarpenterv1beta1.BlockDeviceApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("BlockDeviceMapping"):
-		return &applyconfigurationkarpenterv1beta1.BlockDeviceMappingApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClass"):
-		return &applyconfigurationkarpenterv1beta1.OpenshiftEC2NodeClassApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClassSpec"):
-		return &applyconfigurationkarpenterv1beta1.OpenshiftEC2NodeClassSpecApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClassStatus"):
-		return &applyconfigurationkarpenterv1beta1.OpenshiftEC2NodeClassStatusApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("SecurityGroup"):
-		return &applyconfigurationkarpenterv1beta1.SecurityGroupApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("SecurityGroupSelectorTerm"):
-		return &applyconfigurationkarpenterv1beta1.SecurityGroupSelectorTermApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("Subnet"):
-		return &applyconfigurationkarpenterv1beta1.SubnetApplyConfiguration{}
-	case karpenterv1beta1.SchemeGroupVersion.WithKind("SubnetSelectorTerm"):
-		return &applyconfigurationkarpenterv1beta1.SubnetSelectorTermApplyConfiguration{}
+		// Group=karpenter.hypershift.openshift.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("BlockDevice"):
+		return &karpenterv1.BlockDeviceApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("BlockDeviceMapping"):
+		return &karpenterv1.BlockDeviceMappingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CapacityReservation"):
+		return &karpenterv1.CapacityReservationApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CapacityReservationSelectorTerm"):
+		return &karpenterv1.CapacityReservationSelectorTermApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("KubeletConfiguration"):
+		return &karpenterv1.KubeletConfigurationApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("MetadataOptions"):
+		return &karpenterv1.MetadataOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClass"):
+		return &karpenterv1.OpenshiftEC2NodeClassApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClassSpec"):
+		return &karpenterv1.OpenshiftEC2NodeClassSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OpenshiftEC2NodeClassStatus"):
+		return &karpenterv1.OpenshiftEC2NodeClassStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SecurityGroup"):
+		return &karpenterv1.SecurityGroupApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SecurityGroupSelectorTerm"):
+		return &karpenterv1.SecurityGroupSelectorTermApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Subnet"):
+		return &karpenterv1.SubnetApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SubnetSelectorTerm"):
+		return &karpenterv1.SubnetSelectorTermApplyConfiguration{}
 
 		// Group=scheduling.hypershift.openshift.io, Version=v1alpha1
 	case schedulingv1alpha1.SchemeGroupVersion.WithKind("ClusterSizingConfiguration"):

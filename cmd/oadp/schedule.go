@@ -10,13 +10,12 @@ import (
 	"github.com/openshift/hypershift/cmd/log"
 	"github.com/openshift/hypershift/cmd/util"
 	"github.com/openshift/hypershift/support/oadp"
-	utilroute "github.com/openshift/hypershift/support/util"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func NewCreateScheduleCommand() *cobra.Command {
@@ -66,6 +65,11 @@ For detailed documentation and examples, visit:
 https://hypershift.pages.dev/how-to/disaster-recovery/dr-cli/`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			changedFlags := make(map[string]bool)
+			cmd.Flags().Visit(func(f *pflag.Flag) { changedFlags[f.Name] = true })
+			if err := opts.validateEtcdSnapshotFlags(changedFlags); err != nil {
+				return err
+			}
 			return opts.RunSchedule(cmd.Context())
 		},
 	}
@@ -88,6 +92,7 @@ https://hypershift.pages.dev/how-to/disaster-recovery/dr-cli/`,
 	cmd.Flags().BoolVar(&opts.Paused, "paused", false, "Create schedule in paused state")
 	cmd.Flags().BoolVar(&opts.UseOwnerReferences, "use-owner-references", false, "Use owner references in backup objects")
 	cmd.Flags().BoolVar(&opts.SkipImmediately, "skip-immediately", false, "Skip immediate backup after schedule creation")
+	cmd.Flags().BoolVar(&opts.UseEtcdSnapshot, "use-etcd-snapshot", false, "Use etcd snapshot mode: etcd is backed up via HCPEtcdBackup CRD snapshots instead of PV volume snapshots")
 
 	// Mark required flags
 	_ = cmd.MarkFlagRequired("hc-name")
@@ -97,13 +102,10 @@ https://hypershift.pages.dev/how-to/disaster-recovery/dr-cli/`,
 	return cmd
 }
 
-// generateScheduleName creates a schedule name using the format: {hcName}-{hcNamespace}-{randomSuffix}
-// If the name is too long, it uses utils.ShortenName to ensure it doesn't exceed 63 characters
-func generateScheduleName(hcName, hcNamespace string) string {
-	randomSuffix := utilrand.String(6)
-	baseName := fmt.Sprintf("%s-%s", hcName, hcNamespace)
-	// Use ShortenName to ensure it doesn't exceed DNS1123 subdomain max length (63 chars)
-	return utilroute.ShortenName(baseName, randomSuffix, validation.DNS1123LabelMaxLength)
+// GenerateScheduleName creates a schedule name using the format: {hcName}-{hcNamespace}-{randomSuffix}.
+// If the name is too long, it uses utils.ShortenName to ensure it doesn't exceed 63 characters.
+func GenerateScheduleName(hcName, hcNamespace string) string {
+	return generateName(hcName, hcNamespace)
 }
 
 func (o *CreateOptions) RunSchedule(ctx context.Context) error {
@@ -122,6 +124,20 @@ func (o *CreateOptions) RunSchedule(ctx context.Context) error {
 		var err error
 		o.Client, err = util.GetClient()
 		if err != nil {
+			if o.Render {
+				// In render mode, if we can't connect to cluster, we'll still render but skip validations
+				o.Log.Info("Warning: Cannot connect to cluster for validation, skipping all checks")
+				schedule, resourcePolicyCM, err := o.GenerateScheduleObject("AWS")
+				if err != nil {
+					return fmt.Errorf("failed to generate schedule object: %w", err)
+				}
+				if resourcePolicyCM != nil {
+					if err := renderYAMLObject(resourcePolicyCM); err != nil {
+						return err
+					}
+				}
+				return renderYAMLObject(schedule)
+			}
 			return fmt.Errorf("failed to create kubernetes client for schedule validation: %w", err)
 		}
 	}
@@ -174,13 +190,18 @@ func (o *CreateOptions) RunSchedule(ctx context.Context) error {
 	}
 
 	// Step 6: Generate schedule object
-	schedule, scheduleName, err := o.GenerateScheduleObject(platform)
+	schedule, resourcePolicyCM, err := o.GenerateScheduleObject(platform)
 	if err != nil {
 		return fmt.Errorf("failed to generate schedule object: %w", err)
 	}
 
 	// Step 7: Create or render the schedule
 	if o.Render {
+		if resourcePolicyCM != nil {
+			if err := renderYAMLObject(resourcePolicyCM); err != nil {
+				return err
+			}
+		}
 		return renderYAMLObject(schedule)
 	} else {
 		// Validate that client is available for creation
@@ -188,58 +209,39 @@ func (o *CreateOptions) RunSchedule(ctx context.Context) error {
 			return fmt.Errorf("kubernetes client is required for resource creation (not in render mode)")
 		}
 
+		// Create resource policy ConfigMap if needed (KubeVirt platform)
+		if err := createResourcePolicyConfigMap(ctx, o.Client, resourcePolicyCM, o.OADPNamespace, o.Log); err != nil {
+			return err
+		}
+
 		o.Log.Info("Creating schedule...")
 		if err := o.Client.Create(ctx, schedule); err != nil {
 			return fmt.Errorf("failed to create schedule resource: %w", err)
 		}
-		o.Log.Info("Schedule created successfully", "name", scheduleName, "namespace", o.OADPNamespace, "platform", platform, "schedule", o.Schedule)
+		o.Log.Info("Schedule created successfully", "name", schedule.GetName(), "namespace", o.OADPNamespace, "platform", platform, "schedule", o.Schedule)
 	}
 
 	return nil
 }
 
-func (o *CreateOptions) GenerateScheduleObject(platform string) (*unstructured.Unstructured, string, error) {
+// GenerateScheduleObject generates a schedule object and, for KubeVirt platform,
+// also returns a resource policy ConfigMap that tells Velero to skip RHCOS boot image PVCs.
+func (o *CreateOptions) GenerateScheduleObject(platform string) (*unstructured.Unstructured, *unstructured.Unstructured, error) {
 	// Use the name from flag, or generate if empty
 	scheduleName := o.ScheduleName
 	if scheduleName == "" {
-		scheduleName = generateScheduleName(o.HCName, o.HCNamespace)
+		scheduleName = GenerateScheduleName(o.HCName, o.HCNamespace)
 	}
 
-	// Determine which resources to include
-	var includedResources []string
-	if len(o.IncludedResources) > 0 {
-		// Use custom resources provided by user
-		includedResources = o.IncludedResources
-	} else {
-		// Use default resources based on platform
-		includedResources = getDefaultResourcesForPlatform(platform)
-	}
-
-	// Build included namespaces list
+	includedResources := o.resolveIncludedResources(platform)
 	includedNamespaces := buildIncludedNamespaces(o.HCNamespace, o.HCName, o.IncludeNamespaces)
 
-	// Convert string slices to interface slices for unstructured objects
-	includedNamespacesInterface := make([]interface{}, len(includedNamespaces))
-	for i, ns := range includedNamespaces {
-		includedNamespacesInterface[i] = ns
-	}
-
-	includedResourcesInterface := make([]interface{}, len(includedResources))
-	for i, res := range includedResources {
-		includedResourcesInterface[i] = res
-	}
-
 	// Create backup template spec that will be used for each scheduled backup
-	backupTemplate := map[string]interface{}{
-		"includedNamespaces":       includedNamespacesInterface,
-		"includedResources":        includedResourcesInterface,
-		"storageLocation":          o.StorageLocation,
-		"ttl":                      o.TTL.String(),
-		"snapshotMoveData":         o.SnapshotMoveData,
-		"defaultVolumesToFsBackup": o.DefaultVolumesToFsBackup,
-		"dataMover":                "velero",
-		"snapshotVolumes":          true,
-	}
+	backupTemplate := o.buildBackupSpec(includedNamespaces, includedResources)
+	applyPlatformBackupSpec(backupTemplate, platform)
+
+	// For KubeVirt, generate a resource policy ConfigMap to skip RHCOS boot image PVCs
+	resourcePolicyConfigMap := maybeGenerateResourcePolicy(platform, o.HCName, o.HCNamespace, o.OADPNamespace, backupTemplate)
 
 	// Create schedule spec
 	spec := map[string]interface{}{
@@ -268,7 +270,7 @@ func (o *CreateOptions) GenerateScheduleObject(platform string) (*unstructured.U
 		},
 	}
 
-	return schedule, scheduleName, nil
+	return schedule, resourcePolicyConfigMap, nil
 }
 
 func (o *CreateOptions) ValidateSchedulePace() error {

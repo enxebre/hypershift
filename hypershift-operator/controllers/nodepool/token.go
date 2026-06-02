@@ -8,11 +8,12 @@ import (
 	"time"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	hyperkarpenterv1 "github.com/openshift/hypershift/api/karpenter/v1beta1"
 	"github.com/openshift/hypershift/hypershift-operator/controllers/manifests/ignitionserver"
 	"github.com/openshift/hypershift/support/backwardcompat"
 	"github.com/openshift/hypershift/support/globalconfig"
+	"github.com/openshift/hypershift/support/k8sutil"
 	karpenterutil "github.com/openshift/hypershift/support/karpenter"
+	"github.com/openshift/hypershift/support/releaseinfo"
 	"github.com/openshift/hypershift/support/upsert"
 	supportutil "github.com/openshift/hypershift/support/util"
 
@@ -28,12 +29,14 @@ import (
 
 	"github.com/clarketm/json"
 	ignitionapi "github.com/coreos/ignition/v2/config/v3_2/types"
+	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
 const (
 	TokenSecretTokenGenerationTime       = "hypershift.openshift.io/last-token-generation-time"
 	TokenSecretReleaseKey                = "release"
+	TokenSecretReleaseVersionKey         = "release-version"
 	TokenSecretTokenKey                  = "token"
 	TokenSecretPullSecretHashKey         = "pull-secret-hash"
 	TokenSecretHCConfigurationHashKey    = "hc-configuration-hash"
@@ -67,7 +70,6 @@ type userData struct {
 	caCert                 []byte
 	ignitionServerEndpoint string
 	proxy                  *configv1.Proxy
-	ami                    string
 }
 
 // NewToken is the contract to create a new Token struct.
@@ -134,19 +136,10 @@ func NewToken(ctx context.Context, configGenerator *ConfigGenerator, cpoCapabili
 	proxy := globalconfig.ProxyConfig()
 	globalconfig.ReconcileProxyConfigWithStatusFromHostedCluster(proxy, configGenerator.hostedCluster)
 
-	ami := ""
-	if configGenerator.hostedCluster.Spec.Platform.AWS != nil {
-		ami, err = defaultNodePoolAMI(configGenerator.hostedCluster.Spec.Platform.AWS.Region, configGenerator.nodePool.Spec.Arch, configGenerator.releaseImage)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	token.userData = &userData{
 		ignitionServerEndpoint: ignEndpoint,
 		caCert:                 caCert,
 		proxy:                  proxy,
-		ami:                    ami,
 	}
 
 	return token, nil
@@ -249,7 +242,7 @@ func (t *Token) Reconcile(ctx context.Context) error {
 
 	userDataSecret := t.UserDataSecret()
 	if result, err := t.CreateOrUpdate(ctx, t.Client, userDataSecret, func() error {
-		return t.reconcileUserDataSecret(userDataSecret, string(tokenBytes))
+		return t.reconcileUserDataSecret(log, userDataSecret, string(tokenBytes))
 	}); err != nil {
 		return err
 	} else {
@@ -313,7 +306,7 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 	if karpenterutil.IsKarpenterEnabled(t.hostedCluster.Spec.AutoNode) {
 		npLabels := t.nodePool.GetLabels()
 		if npLabels != nil && npLabels[karpenterutil.ManagedByKarpenterLabel] == "true" {
-			tokenSecret.Annotations[supportutil.HostedClusterAnnotation] = client.ObjectKeyFromObject(t.ConfigGenerator.hostedCluster).String()
+			tokenSecret.Annotations[k8sutil.HostedClusterAnnotation] = client.ObjectKeyFromObject(t.ConfigGenerator.hostedCluster).String()
 			if tokenSecret.Labels == nil {
 				tokenSecret.Labels = make(map[string]string)
 			}
@@ -322,6 +315,16 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 	}
 	// active token should never be marked as expired.
 	delete(tokenSecret.Annotations, hyperv1.IgnitionServerTokenExpirationTimestampAnnotation)
+
+	// During a backup/restore the token secret may be deleted by the secret janitor
+	// before the NodePool is restored, causing the NodePool controller to create a new
+	// token secret without the ignition-reached annotation. Since the nodes are already
+	// running and won't contact the ignition endpoint again, the annotation must be
+	// carried over so that ReachedIgnitionEndpoint remains True and MachineHealthChecks
+	// continue to be created.
+	if _, restored := t.hostedCluster.Annotations[hyperv1.HostedClusterRestoredFromBackupAnnotation]; restored {
+		tokenSecret.Annotations[TokenSecretIgnitionReachedAnnotation] = "True"
+	}
 
 	if tokenSecret.Data == nil {
 		// 2. - Reconcile towards expected state of the world.
@@ -343,6 +346,7 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 		tokenSecret.Annotations[TokenSecretTokenGenerationTime] = time.Now().Format(time.RFC3339Nano)
 		tokenSecret.Data[TokenSecretTokenKey] = []byte(uuid.New().String())
 		tokenSecret.Data[TokenSecretReleaseKey] = []byte(t.nodePool.Spec.Release.Image)
+		tokenSecret.Data[TokenSecretReleaseVersionKey] = []byte(t.releaseImage.Version())
 		tokenSecret.Data[TokenSecretConfigKey] = compressedConfig.Bytes()
 
 		// Hash values that are used by the "token secret controller" / "local ignition provider"  to determine if this input
@@ -359,7 +363,7 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 	return nil
 }
 
-func (t *Token) reconcileUserDataSecret(userDataSecret *corev1.Secret, token string) error {
+func (t *Token) reconcileUserDataSecret(log logr.Logger, userDataSecret *corev1.Secret, token string) error {
 	// The token secret controller deletes expired token Secrets.
 	// When that happens the NodePool controller reconciles and create a new one.
 	// Then it reconciles the userData Secret with the new generated token.
@@ -377,7 +381,10 @@ func (t *Token) reconcileUserDataSecret(userDataSecret *corev1.Secret, token str
 	if karpenterutil.IsKarpenterEnabled(t.hostedCluster.Spec.AutoNode) {
 		npLabels := t.nodePool.GetLabels()
 		if npLabels != nil && npLabels[karpenterutil.ManagedByKarpenterLabel] == "true" {
-			userDataSecret.Labels[hyperkarpenterv1.UserDataAMILabel] = t.userData.ami
+			err := setKarpenterAMILabels(log, userDataSecret, t.hostedCluster.Spec.Platform.AWS.Region, t.releaseImage, t.hostedCluster.Spec.Platform.Type)
+			if err != nil {
+				return err
+			}
 			userDataSecret.Labels[karpenterutil.ManagedByKarpenterLabel] = "true"
 		}
 	}
@@ -392,6 +399,29 @@ func (t *Token) reconcileUserDataSecret(userDataSecret *corev1.Secret, token str
 	userDataSecret.Data = map[string][]byte{
 		"disableTemplating": []byte(base64.StdEncoding.EncodeToString([]byte("true"))),
 		"value":             userDataValue,
+	}
+	return nil
+}
+
+func setKarpenterAMILabels(log logr.Logger, userDataSecret *corev1.Secret, region string, releaseImage *releaseinfo.ReleaseImage, platform hyperv1.PlatformType) error {
+	supportedArchitectures, err := karpenterutil.SupportedArchitectures(platform)
+	if err != nil {
+		return fmt.Errorf("failed to get supported architectures: %w", err)
+	}
+	supported := 0
+	for _, arch := range supportedArchitectures {
+		ami, err := defaultNodePoolAMI(region, arch, releaseImage)
+		if err != nil {
+			// skip unavailable architectures gracefully
+			log.Error(err, "failed to get default NodePool AMI for architecture", "architecture", arch)
+			continue
+		}
+		labelKey := karpenterutil.ArchToAMILabelKey(arch)
+		userDataSecret.Labels[labelKey] = ami
+		supported++
+	}
+	if supported == 0 {
+		return fmt.Errorf("no supported architectures found")
 	}
 	return nil
 }

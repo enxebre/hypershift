@@ -175,6 +175,15 @@ func AzureFileCsiDriverControllerMetricsService(ns string) *corev1.Service {
 	}
 }
 
+func AWSEBSCsiDriverControllerMetricsService(ns string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-ebs-csi-driver-controller-metrics",
+			Namespace: ns,
+		},
+	}
+}
+
 func EtcdSignerSecret(ns string) *corev1.Secret {
 	return secretFor(ns, "etcd-signer")
 }
@@ -249,6 +258,14 @@ func HCCOClientCertSecret(ns string) *corev1.Secret {
 	return secretFor(ns, "hcco-client")
 }
 
+func KASBootstrapContainerSigner(ns string) *corev1.Secret {
+	return secretFor(ns, "kas-bootstrap-container-signer")
+}
+
+func KASBootstrapContainerClientCertSecret(ns string) *corev1.Secret {
+	return secretFor(ns, "kas-bootstrap-container-client")
+}
+
 func KASMachineBootstrapClientCertSecret(ns string) *corev1.Secret {
 	return secretFor(ns, "kas-bootstrap-client")
 }
@@ -315,6 +332,14 @@ func ClusterNodeTuningOperatorServingCertSecret(ns string) *corev1.Secret {
 	return secretFor(ns, "node-tuning-operator-tls")
 }
 
+func AzureDiskCSIDriverOperatorServingCertSecret(ns string) *corev1.Secret {
+	return secretFor(ns, "azure-disk-csi-driver-operator-serving-cert")
+}
+
+func AzureFileCSIDriverOperatorServingCertSecret(ns string) *corev1.Secret {
+	return secretFor(ns, "azure-file-csi-driver-operator-serving-cert")
+}
+
 func OLMPackageServerCertSecret(ns string) *corev1.Secret { return secretFor(ns, "packageserver-cert") }
 
 func OLMOperatorServingCertSecret(ns string) *corev1.Secret {
@@ -343,12 +368,24 @@ func AWSPodIdentityWebhookServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "aws-pod-identity-webhook-serving-cert")
 }
 
+func AzureWorkloadIdentityWebhookServingCert(ns string) *corev1.Secret {
+	return secretFor(ns, "azure-workload-identity-webhook-serving-cert")
+}
+
 func AzureDiskCsiDriverControllerMetricsServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "azure-disk-csi-driver-controller-metrics-serving-cert")
 }
 
 func AzureFileCsiDriverControllerMetricsServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "azure-file-csi-driver-controller-metrics-serving-cert")
+}
+
+func AWSEBSCsiDriverOperatorServingCert(ns string) *corev1.Secret {
+	return secretFor(ns, "aws-ebs-csi-driver-operator-serving-cert")
+}
+
+func AWSEBSCsiDriverControllerMetricsServingCert(ns string) *corev1.Secret {
+	return secretFor(ns, "aws-ebs-csi-driver-controller-metrics-serving-cert")
 }
 
 func MultusAdmissionControllerServingCert(ns string) *corev1.Secret {

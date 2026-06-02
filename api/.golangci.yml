@@ -11,25 +11,87 @@ linters:
       kubeapilinter:
         path: ../hack/tools/bin/kube-api-linter.so
         description: kubeapilinter is the Kube-API-Linter and lints Kube like APIs based on API conventions and best practices.
-        original-url: sigs.k8s.io/kube-api-linter
         settings:
           linters:
-            # Disable all default linters and only enable specific ones.
-            # This prevents new default linters from causing unexpected failures
-            # when upgrading kube-api-linter.
-            disable:
-              - "*"
             enable:
-              - conditions
+              - forbiddenmarkers
               - maxlength
+              - minlength
+              - namingconventions
               - nobools
               - nomaps
+              - preferredmarkers
               - statussubresource
+            disable:
+              - statusoptional # This is legacy and not something we currently recommend.
+              - nonpointerstructs # This is intended for native types, not CRD types.
           lintersConfig:
             conditions:
               isFirstField: Warn
-              usePatchStrategy: Ignore
-              useProtobuf: Ignore
+              usePatchStrategy: Forbid # Variation from openshift/api as HyperShift only supports CRDs.
+              useProtobuf: Forbid # Variation from openshift/api as HyperShift only supports CRDs.
+            forbiddenmarkers:
+              markers:
+              - identifier: "openshift:enable:FeatureSets"
+              - identifier: "openshift:validation:FeatureSetAwareEnum"
+              - identifier: "openshift:validation:FeatureSetAwareXValidation"
+              - identifier: "kubebuilder:validation:UniqueItems"
+            optionalfields:
+              pointers:
+                preference: WhenRequired
+                policy: SuggestFix
+              omitEmpty:
+                # This will force omitempty on optional fields.
+                # This is in line with upstream guidance where optional fields should be omitted
+                # from the serialized output unless they are non-zero.
+                policy: SuggestFix
+              omitzero:
+                # This will force omitzero on optional struct fields.
+                # This means they can be omitted correctly and prevents the need for pointers to structs.
+                policy: SuggestFix
+            preferredmarkers:
+              markers:
+              - preferredIdentifier: "kubebuilder:validation:XValidation"
+                equivalentIdentifiers:
+                - identifier: "kubebuilder:validation:Pattern" # Use CEL expressions instead to allow more expressive error messages.
+            requiredfields:
+              pointers:
+                # This will force pointers when the field is required, but only when the zero
+                # value is a valid user choice, and has a semantic difference to being omitted (e.g. replicas allows 0).
+                policy: SuggestFix
+              omitempty:
+                # This will force omitempty on required fields.
+                # We do this so that the behaviour of not setting a value for the field is the same between
+                # both structured and unstructured clients.
+                policy: SuggestFix
+              omitzero:
+                # This will force omitzero on required struct fields.
+                # This means they can be omitted correctly and prevents the need for pointers to structs.
+                policy: SuggestFix
+            namingconventions:
+              conventions:
+              - name: nokind
+                violationMatcher: "^Kind$"
+                operation: Replacement
+                replacement: "Resource"
+                message: "API Kinds can be ambiguous and should be replaced with Resource"
+            noreferences:
+              policy: NoReferences
+            uniquemarkers:
+              customMarkers:
+              - identifier: "openshift:validation:FeatureGateAwareEnum"
+                attributes:
+                - featureGate
+                - requiredFeatureGate
+              - identifier: "openshift:validation:FeatureGateMaxItems"
+                attributes:
+                - featureGate
+                - requiredFeatureGate
+              - identifier: "openshift:validation:FeatureGateAwareXValidation"
+                attributes:
+                - featureGate
+                - requiredFeatureGate
+                - rule
   exclusions:
     warn-unused: true
     generated: lax
@@ -41,7 +103,7 @@ linters:
     rules:
       - linters:
           - kubeapilinter
-        path-except: hypershift//*
+        path: ^vendor/
       - linters:
           - kubeapilinter
         path: hypershift/v1beta1/aws.go
@@ -123,7 +185,7 @@ linters:
       # marking API issues for future review. Each should be evaluated
       # to determine if it should be fixed or permanently excepted.
 
-      # arrayofstruct (4 issues)
+      # arrayofstruct (5 issues)
       - linters:
           - kubeapilinter
         path: hypershift/v1beta1/aws.go
@@ -140,7 +202,6 @@ linters:
           - kubeapilinter
         path: hypershift/v1beta1/openstack.go
         text: 'arrayofstruct: OpenStackPlatformSpec.Subnets is an array of structs, but the struct has no required fields. At least one field should be marked as required to prevent ambiguous YAML configurations'
-
       # conditions (1 issue)
       - linters:
           - kubeapilinter
@@ -180,24 +241,6 @@ linters:
           - kubeapilinter
         path: hypershift/v1beta1/kubevirt.go
         text: 'defaultorrequired: field KubevirtNodePoolPlatform.RootVolume has conflicting markers: default_or_required: \{\[kubebuilder:default\], \[required\]\}. A field with a default value cannot be required. A required field must be provided by the user, so a default value is not meaningful'
-
-      # duplicatemarkers (4 issues)
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/azure.go
-        text: 'duplicatemarkers: Diagnostics.StorageAccountType has duplicated markers kubebuilder:validation:Enum'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/azure.go
-        text: 'duplicatemarkers: ManagedIdentity.ObjectEncoding has duplicated markers kubebuilder:default'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/azure.go
-        text: 'duplicatemarkers: ManagedIdentity.ObjectEncoding has duplicated markers kubebuilder:validation:Enum'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/hostedcluster_types.go
-        text: 'duplicatemarkers: ProvisionerConfig.Name has duplicated markers kubebuilder:validation:Enum'
 
       # integers (6 issues)
       - linters:
@@ -276,6 +319,27 @@ linters:
           - kubeapilinter
         path: hypershift/v1beta1/openstack.go
         text: 'nobools: field OpenStackPlatformSpec.DisableExternalNetwork pointer should not use a bool. Use a string type with meaningful constant values as an enum.'
+      - linters:
+          - kubeapilinter
+        path: karpenter/v1/kubelet_config.go
+        text: 'nobools: field KubeletConfiguration.CPUCFSQuota pointer should not use a bool. Use a string type with meaningful constant values as an enum.'
+
+      - linters:
+          - kubeapilinter
+        path: karpenter/v1/karpenter_types.go
+        text: 'minlength: field OpenshiftEC2NodeClassSpec.Kubelet type KubeletConfiguration must have a minimum properties, add kubebuilder:validation:MinProperties marker'
+      - linters:
+          - kubeapilinter
+        path: karpenter/v1/karpenter_types.go
+        text: 'optionalfields: field OpenshiftEC2NodeClassSpec.Kubelet has a valid zero value'
+      - linters:
+          - kubeapilinter
+        path: karpenter/v1/kubelet_config.go
+        text: 'nodurations: field KubeletConfiguration.EvictionSoftGracePeriod map value should not use a Duration. Use an integer type with units in the name to avoid the need for clients to implement Go style duration parsing.'
+      - linters:
+          - kubeapilinter
+        path: karpenter/v1/kubelet_config.go
+        text: 'nomaps: field KubeletConfiguration\.(SystemReserved|KubeReserved|EvictionHard|EvictionSoft|EvictionSoftGracePeriod)'
 
       # statussubresource (1 issue)
       - linters:
@@ -455,38 +519,6 @@ linters:
       - linters:
           - kubeapilinter
         path: hypershift/v1beta1/endpointservice_types.go
-        text: 'optionalfields: field Status should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'optionalfields: field EndpointAccess should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field DNSZoneName should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field EndpointIP should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field NATSubnet should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field ServiceAttachmentName should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field ServiceAttachmentURI should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field Spec should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
         text: 'optionalfields: field Status should be a pointer'
       - linters:
           - kubeapilinter
@@ -1312,46 +1344,6 @@ linters:
         text: 'requiredfields: field NetworkLoadBalancerName should have the omitempty tag'
       - linters:
           - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field Name should have the omitempty tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field Network does not allow the zero value. It must have the omitzero tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field NetworkConfig does not allow the zero value. It must have the omitzero tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field PrivateServiceConnectSubnet does not allow the zero value. It must have the omitzero tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field Project should have the omitempty tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field Region has a valid zero value'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcp.go
-        text: 'requiredfields: field Region should have the omitempty tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'requiredfields: field ConsumerAcceptList should have the omitempty tag'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'requiredfields: field LoadBalancerIP has a valid zero value'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'requiredfields: field LoadBalancerIP should have the omitempty tag'
-      - linters:
-          - kubeapilinter
         path: hypershift/v1beta1/hosted_controlplane.go
         text: 'requiredfields: field DNS has a valid zero value'
       - linters:
@@ -1964,18 +1956,6 @@ linters:
           - kubeapilinter
         path: hypershift/v1beta1/endpointservice_types.go
         text: 'ssatags: AWSEndpointServiceStatus.DNSNames should have a listType marker for proper Server-Side Apply behavior'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'ssatags: GCPPrivateServiceConnectSpec.ConsumerAcceptList should have a listType marker for proper Server-Side Apply behavior'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'optionalfields: field ForwardingRuleName should be a pointer'
-      - linters:
-          - kubeapilinter
-        path: hypershift/v1beta1/gcpprivateserviceconnect_types.go
-        text: 'ssatags: GCPPrivateServiceConnectStatus.DNSRecords should have a listType marker for proper Server-Side Apply behavior'
       - linters:
           - kubeapilinter
         path: hypershift/v1beta1/hosted_controlplane.go

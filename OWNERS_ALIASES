@@ -1,4 +1,10 @@
 aliases:
+  api-approvers:
+    - enxebre
+    - csrwng
+    - sjenning
+    - joelspeed
+    - everettraven
   tech-leads:
     - enxebre
     - csrwng
@@ -9,6 +15,7 @@ aliases:
     - sjenning
     - muraee
     - bryan-cox
+    - cblecker
     - jparrill
     - devguyio
   core-reviewers:
@@ -17,8 +24,12 @@ aliases:
     - sjenning
     - muraee
     - bryan-cox
+    - cblecker
     - jparrill
     - devguyio
+    - sdminonne
+    - clebs
+    - Nirshal
   karpenter-approvers:
     - elmiko
     - enxebre
@@ -61,6 +72,11 @@ aliases:
     - cristianoveiga
     - jimdaga
     - patjlm
+  powervs-reviewers:
+    - alishaIBM
+    - bkhadars
+    - mkumatag
+    - prb112
   openstack-approvers:
     - mandre
     - stephenfin

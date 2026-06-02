@@ -49,6 +49,7 @@ rules:
 - apiGroups:
   - apps
   resources:
+  - deployments
   - replicasets
   verbs:
   - get

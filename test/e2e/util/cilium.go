@@ -13,7 +13,7 @@ import (
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/support/assets"
 	"github.com/openshift/hypershift/support/azureutil"
-	hyperutil "github.com/openshift/hypershift/support/util"
+	"github.com/openshift/hypershift/support/k8sutil"
 
 	configv1 "github.com/openshift/api/config/v1"
 	securityv1 "github.com/openshift/api/security/v1"
@@ -39,8 +39,8 @@ const (
 	// CiliumCNIProvider is the name of the Cilium CNI provider.
 	CiliumCNIProvider = "cilium"
 	// Generic timeouts and intervals for Cilium tests
-	ciliumDefaultTimeout           = 10 * time.Minute
-	ciliumLongTimeout              = 20 * time.Minute
+	ciliumDefaultTimeout           = 30 * time.Minute
+	ciliumLongTimeout              = 45 * time.Minute
 	ciliumShortTimeout             = 2 * time.Minute
 	ciliumDefaultPollInterval      = 10 * time.Second
 	ciliumLongPollInterval         = 15 * time.Second
@@ -136,7 +136,7 @@ func ciliumManifestFiles() []string {
 
 // InstallCilium validates that Cilium network policies are properly enforced
 // in ARO HCP guest clusters. This test covers:Verifying Cilium installation
-func InstallCilium(t *testing.T, ctx context.Context, guestClient crclient.Client, hostedCluster *hyperv1.HostedCluster, reader assets.AssetReader) {
+func InstallCilium(t *testing.T, ctx context.Context, guestClient crclient.Client, hostedCluster *hyperv1.HostedCluster, reader assets.AssetReader, nodePoolReplicas int32) {
 	t.Run("InstallCilium", func(t *testing.T) {
 		if !azureutil.IsAroHCP() {
 			t.Skip("test only supported on ARO HCP clusters")
@@ -324,20 +324,7 @@ func InstallCilium(t *testing.T, ctx context.Context, guestClient crclient.Clien
 
 			// Now wait for DaemonSet pods to be ready
 			t.Log("Waiting for Cilium agent pods from DaemonSet to be ready")
-			nodeCount, err := hyperutil.CountAvailableNodes(ctx, guestClient)
-			g.Expect(err).NotTo(HaveOccurred(), "failed to count available nodes")
-			err = waitForDaemonSetsReady(t, ctx, guestClient, []DaemonSetManifest{
-				{
-					GetFunc: func() *appsv1.DaemonSet {
-						return &appsv1.DaemonSet{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      ciliumDaemonSet.Name,
-								Namespace: ciliumDaemonSet.Namespace,
-							},
-						}
-					},
-				},
-			}, nodeCount)
+			err = waitForDaemonSetReady(t, ctx, guestClient, ciliumDaemonSet.Name, ciliumDaemonSet.Namespace, nodePoolReplicas)
 			g.Expect(err).NotTo(HaveOccurred(), "failed to wait for Cilium DaemonSet to be ready")
 
 			t.Log("Cilium installation completed successfully")
@@ -543,7 +530,7 @@ func CleanupCiliumConnectivityTestResources(ctx context.Context, t *testing.T, g
 			Name: "cilium-test",
 		},
 	}
-	if _, err := hyperutil.DeleteIfNeeded(ctx, guestClient, scc); err != nil {
+	if _, err := k8sutil.DeleteIfNeeded(ctx, guestClient, scc); err != nil {
 		t.Logf("Warning: failed to delete SCC: %v", err)
 	}
 
@@ -553,7 +540,7 @@ func CleanupCiliumConnectivityTestResources(ctx context.Context, t *testing.T, g
 			Name: ciliumTestNamespace,
 		},
 	}
-	if _, err := hyperutil.DeleteIfNeeded(ctx, guestClient, ns); err != nil {
+	if _, err := k8sutil.DeleteIfNeeded(ctx, guestClient, ns); err != nil {
 		t.Logf("Warning: failed to delete namespace: %v", err)
 	}
 

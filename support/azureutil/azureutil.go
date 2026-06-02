@@ -59,7 +59,7 @@ func NewARMClientOptions(cloudConfig cloud.Configuration) *arm.ClientOptions {
 // Returns an error if the cloud name is not recognized.
 func GetAzureCloudConfiguration(cloudName string) (cloud.Configuration, error) {
 	switch cloudName {
-	case "AzurePublicCloud", "":
+	case config.DefaultAzureCloud, "":
 		return cloud.AzurePublic, nil
 	case "AzureUSGovernmentCloud":
 		return cloud.AzureGovernment, nil
@@ -252,6 +252,14 @@ func GetResourceGroupInfo(ctx context.Context, rgName string, subscriptionID str
 	return rg, nil
 }
 
+// IsPrivateKeyVault returns true if the HCP is configured with private Key Vault access
+func IsPrivateKeyVault(hcp *hyperv1.HostedControlPlane) bool {
+	if hcp.Spec.SecretEncryption == nil || hcp.Spec.SecretEncryption.KMS == nil || hcp.Spec.SecretEncryption.KMS.Azure == nil {
+		return false
+	}
+	return hcp.Spec.SecretEncryption.KMS.Azure.KeyVaultAccess == hyperv1.AzureKeyVaultPrivate
+}
+
 // IsAroHCP returns true if the managed service environment variable is set to ARO-HCP
 func IsAroHCP() bool {
 	return os.Getenv("MANAGED_SERVICE") == hyperv1.AroHCP
@@ -260,6 +268,14 @@ func IsAroHCP() bool {
 // IsSelfManagedAzure returns true when the platform is Azure and the managed service is not ARO-HCP
 func IsSelfManagedAzure(platform hyperv1.PlatformType) bool {
 	return platform == hyperv1.AzurePlatform && !IsAroHCP()
+}
+
+// IsSelfManagedAzureWithWorkloadIdentity returns true if the platform is self-managed Azure
+// and workload identities are configured.
+func IsSelfManagedAzureWithWorkloadIdentity(platformType hyperv1.PlatformType, azure *hyperv1.AzurePlatformSpec) bool {
+	return IsSelfManagedAzure(platformType) &&
+		azure != nil &&
+		azure.AzureAuthenticationConfig.WorkloadIdentities != nil
 }
 
 // SetAsAroHCPTest sets the proper environment variable for the test, designating this is an ARO-HCP environment
@@ -374,6 +390,23 @@ func GetKeyVaultDNSSuffixFromCloudType(cloud string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown cloud type %q", cloud)
 	}
+}
+
+// GetKeyVaultFQDN constructs the fully qualified domain name for an Azure Key Vault
+// from the HCP spec. It uses the active key's vault name and the cloud-specific DNS suffix.
+func GetKeyVaultFQDN(hcp *hyperv1.HostedControlPlane) (string, error) {
+	if hcp.Spec.SecretEncryption == nil || hcp.Spec.SecretEncryption.KMS == nil ||
+		hcp.Spec.SecretEncryption.KMS.Azure == nil ||
+		hcp.Spec.SecretEncryption.KMS.Azure.ActiveKey.KeyVaultName == "" {
+		return "", fmt.Errorf("azure KMS is not configured")
+	}
+
+	vaultName := hcp.Spec.SecretEncryption.KMS.Azure.ActiveKey.KeyVaultName
+	suffix, err := GetKeyVaultDNSSuffixFromCloudType(hcp.Spec.Platform.Azure.Cloud)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s.%s", vaultName, suffix), nil
 }
 
 // GetAzureEncryptionKeyInfo extracts the key vault name, key name, and key version from an encryption key ID

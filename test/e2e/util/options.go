@@ -13,6 +13,7 @@ import (
 	hypershiftaws "github.com/openshift/hypershift/cmd/cluster/aws"
 	"github.com/openshift/hypershift/cmd/cluster/azure"
 	"github.com/openshift/hypershift/cmd/cluster/core"
+	hypershiftgcp "github.com/openshift/hypershift/cmd/cluster/gcp"
 	"github.com/openshift/hypershift/cmd/cluster/kubevirt"
 	"github.com/openshift/hypershift/cmd/cluster/none"
 	hypershiftopenstack "github.com/openshift/hypershift/cmd/cluster/openstack"
@@ -93,6 +94,9 @@ type Options struct {
 	ExternalOIDCTestUsers       string
 	// ExternalCNIProvider specifies the third-party CNI provider (e.g., "cilium", "calico")
 	ExternalCNIProvider string
+
+	// AdditionalPullSecretFile is the path to a pull secret file used by the EnsureGlobalPullSecret test
+	AdditionalPullSecretFile string
 }
 
 type HyperShiftOperatorInstallOptions struct {
@@ -101,6 +105,8 @@ type HyperShiftOperatorInstallOptions struct {
 	AWSOidcS3Region                        string
 	AWSPrivateCredentialsFile              string
 	AWSPrivateRegion                       string
+	AzurePrivateCredentialsFile            string
+	AzurePLSResourceGroup                  string
 	EnableCIDebugOutput                    bool
 	ExternalDNSCredentials                 string
 	ExternalDNSDomain                      string
@@ -143,6 +149,7 @@ type ConfigurableClusterOptions struct {
 	BaseDomain                            string
 	ClusterCIDR                           stringSliceVar
 	ControlPlaneOperatorImage             string
+	DisableClusterCapabilities            stringSliceVar
 	EtcdStorageClass                      string
 	ExternalDNSDomain                     string
 	KubeVirtContainerDiskImage            string
@@ -178,6 +185,28 @@ type ConfigurableClusterOptions struct {
 	SSHKeyFile                            string
 	ServiceCIDR                           stringSliceVar
 	Zone                                  stringSliceVar
+
+	// GCP Platform Configuration
+	GCPProject                       string
+	GCPRegion                        string
+	GCPNetwork                       string
+	GCPPrivateServiceConnectSubnet   string
+	GCPWorkloadIdentityProjectNumber string
+	GCPWorkloadIdentityPoolID        string
+	GCPWorkloadIdentityProviderID    string
+	GCPNodePoolServiceAccount        string
+	GCPControlPlaneServiceAccount    string
+	GCPCloudControllerServiceAccount string
+	GCPStorageServiceAccount         string
+	GCPImageRegistryServiceAccount   string
+	GCPNetworkServiceAccount         string
+	GCPServiceAccountSigningKeyPath  string
+	GCPEndpointAccess                string
+	GCPIssuerURL                     string
+	GCPMachineType                   string
+	GCPZone                          string
+	GCPSubnet                        string
+	GCPBootImage                     string
 }
 
 func (o *Options) DefaultClusterOptions(t *testing.T) PlatformAgnosticOptions {
@@ -197,11 +226,9 @@ func (o *Options) DefaultClusterOptions(t *testing.T) PlatformAgnosticOptions {
 			ClusterCIDR:                      []string{"10.132.0.0/14"},
 			BeforeApply:                      o.BeforeApply,
 			Log:                              NewLogr(t),
-			Annotations: []string{
-				fmt.Sprintf("%s=true", hyperv1.CleanupCloudResourcesAnnotation),
-				fmt.Sprintf("%s=true", hyperv1.SkipReleaseImageValidation),
-			},
-			EtcdStorageClass: o.ConfigurableClusterOptions.EtcdStorageClass,
+			Annotations:                      e2eDefaultAnnotations(),
+			EtcdStorageClass:                 o.ConfigurableClusterOptions.EtcdStorageClass,
+			DisableClusterCapabilities:       o.ConfigurableClusterOptions.DisableClusterCapabilities,
 		},
 		NonePlatform:        o.DefaultNoneOptions(),
 		AWSPlatform:         o.DefaultAWSOptions(),
@@ -209,11 +236,12 @@ func (o *Options) DefaultClusterOptions(t *testing.T) PlatformAgnosticOptions {
 		AzurePlatform:       o.DefaultAzureOptions(),
 		PowerVSPlatform:     o.DefaultPowerVSOptions(),
 		OpenStackPlatform:   o.DefaultOpenStackOptions(),
+		GCPPlatform:         o.DefaultGCPOptions(),
 		ExternalCNIProvider: o.ExternalCNIProvider,
 	}
 
 	switch o.Platform {
-	case hyperv1.AWSPlatform, hyperv1.AzurePlatform, hyperv1.NonePlatform, hyperv1.KubevirtPlatform, hyperv1.OpenStackPlatform:
+	case hyperv1.AWSPlatform, hyperv1.AzurePlatform, hyperv1.NonePlatform, hyperv1.KubevirtPlatform, hyperv1.OpenStackPlatform, hyperv1.GCPPlatform:
 		createOption.Arch = hyperv1.ArchitectureAMD64
 	case hyperv1.PowerVSPlatform:
 		createOption.Arch = hyperv1.ArchitecturePPC64LE
@@ -416,6 +444,31 @@ func (o *Options) DefaultPowerVSOptions() powervs.RawCreateOptions {
 	}
 }
 
+func (o *Options) DefaultGCPOptions() hypershiftgcp.RawCreateOptions {
+	return hypershiftgcp.RawCreateOptions{
+		Project:                       o.ConfigurableClusterOptions.GCPProject,
+		Region:                        o.ConfigurableClusterOptions.GCPRegion,
+		Network:                       o.ConfigurableClusterOptions.GCPNetwork,
+		PrivateServiceConnectSubnet:   o.ConfigurableClusterOptions.GCPPrivateServiceConnectSubnet,
+		WorkloadIdentityProjectNumber: o.ConfigurableClusterOptions.GCPWorkloadIdentityProjectNumber,
+		WorkloadIdentityPoolID:        o.ConfigurableClusterOptions.GCPWorkloadIdentityPoolID,
+		WorkloadIdentityProviderID:    o.ConfigurableClusterOptions.GCPWorkloadIdentityProviderID,
+		NodePoolServiceAccount:        o.ConfigurableClusterOptions.GCPNodePoolServiceAccount,
+		ControlPlaneServiceAccount:    o.ConfigurableClusterOptions.GCPControlPlaneServiceAccount,
+		CloudControllerServiceAccount: o.ConfigurableClusterOptions.GCPCloudControllerServiceAccount,
+		StorageServiceAccount:         o.ConfigurableClusterOptions.GCPStorageServiceAccount,
+		ImageRegistryServiceAccount:   o.ConfigurableClusterOptions.GCPImageRegistryServiceAccount,
+		NetworkServiceAccount:         o.ConfigurableClusterOptions.GCPNetworkServiceAccount,
+		ServiceAccountSigningKeyPath:  o.ConfigurableClusterOptions.GCPServiceAccountSigningKeyPath,
+		EndpointAccess:                o.ConfigurableClusterOptions.GCPEndpointAccess,
+		IssuerURL:                     o.ConfigurableClusterOptions.GCPIssuerURL,
+		MachineType:                   o.ConfigurableClusterOptions.GCPMachineType,
+		Zone:                          o.ConfigurableClusterOptions.GCPZone,
+		Subnet:                        o.ConfigurableClusterOptions.GCPSubnet,
+		BootImage:                     o.ConfigurableClusterOptions.GCPBootImage,
+	}
+}
+
 // Complete is intended to be called after flags have been bound and sets
 // up additional contextual defaulting.
 func (o *Options) Complete() error {
@@ -451,8 +504,11 @@ func (o *Options) Complete() error {
 			o.ArtifactDir = os.Getenv("ARTIFACT_DIR")
 		}
 		if len(o.ConfigurableClusterOptions.BaseDomain) == 0 && o.Platform != hyperv1.KubevirtPlatform {
-			// TODO: make this an envvar with change to openshift/release, then change here
-			o.ConfigurableClusterOptions.BaseDomain = DefaultCIBaseDomain
+			if baseDomain := os.Getenv("BASE_DOMAIN"); len(baseDomain) > 0 {
+				o.ConfigurableClusterOptions.BaseDomain = baseDomain
+			} else {
+				o.ConfigurableClusterOptions.BaseDomain = DefaultCIBaseDomain
+			}
 		}
 	}
 
@@ -543,4 +599,27 @@ func (s *stringMapVar) Set(value string) error {
 
 func shouldTestCPOOverride() bool {
 	return os.Getenv("TEST_CPO_OVERRIDE") == "1"
+}
+
+func e2eDefaultAnnotations() []string {
+	annotations := []string{
+		fmt.Sprintf("%s=true", hyperv1.CleanupCloudResourcesAnnotation),
+		fmt.Sprintf("%s=true", hyperv1.SkipReleaseImageValidation),
+	}
+	if os.Getenv("E2E_RESOURCE_REQUEST_OVERRIDES") == "1" {
+		annotations = append(annotations,
+			fmt.Sprintf("%s/ignition-server.ignition-server=cpu=200m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/control-plane-operator.control-plane-operator=cpu=500m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/packageserver.packageserver=cpu=50m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/certified-operators-catalog.registry=cpu=30m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/community-operators-catalog.registry=cpu=30m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/redhat-marketplace-catalog.registry=cpu=30m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/redhat-operators-catalog.registry=cpu=30m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/hosted-cluster-config-operator.hosted-cluster-config-operator=cpu=100m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/control-plane-pki-operator.control-plane-pki-operator=cpu=30m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/kube-apiserver.kube-apiserver=cpu=500m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+			fmt.Sprintf("%s/cluster-version-operator.cluster-version-operator=cpu=75m", hyperv1.ResourceRequestOverrideAnnotationPrefix),
+		)
+	}
+	return annotations
 }

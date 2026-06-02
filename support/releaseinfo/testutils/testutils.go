@@ -2,8 +2,8 @@ package testutils
 
 import (
 	haproxy "github.com/openshift/hypershift/hypershift-operator/controllers/nodepool/apiserver-haproxy"
+	"github.com/openshift/hypershift/support/podspec"
 	"github.com/openshift/hypershift/support/releaseinfo"
-	"github.com/openshift/hypershift/support/util"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -48,7 +48,7 @@ func InitReleaseImageOrDie(version string) *releaseinfo.ReleaseImage {
 						From: &corev1.ObjectReference{Name: "capi-openstack"},
 					},
 					{
-						Name: util.AvailabilityProberImageName,
+						Name: podspec.AvailabilityProberImageName,
 						From: &corev1.ObjectReference{Name: ""},
 					},
 					{
@@ -71,7 +71,8 @@ func InitReleaseImageOrDie(version string) *releaseinfo.ReleaseImage {
 							},
 						},
 						GCP: releaseinfo.CoreOSGCPImage{
-							Image: "projects/rhcos-cloud/global/images/rhcos-x86-64-test",
+							Project: "rhcos-cloud",
+							Name:    "rhcos-x86-64-test",
 						},
 					},
 				},
@@ -90,7 +91,8 @@ func InitReleaseImageOrDie(version string) *releaseinfo.ReleaseImage {
 							},
 						},
 						GCP: releaseinfo.CoreOSGCPImage{
-							Image: "projects/rhcos-cloud/global/images/rhcos-aarch64-test",
+							Project: "rhcos-cloud",
+							Name:    "rhcos-aarch64-test",
 						},
 					},
 				},

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/manifests"
+	"github.com/openshift/hypershift/support/podspec"
 	"github.com/openshift/hypershift/support/thirdparty/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/hypershift/support/upsert"
 	"github.com/openshift/hypershift/support/util"
@@ -15,10 +16,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
 
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crreconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -40,7 +39,6 @@ type GlobalPullSecretPodConfig struct {
 type Reconciler struct {
 	cpClient               crclient.Client
 	kubeSystemSecretClient crclient.Client
-	nodeClient             crclient.Client
 	hcUncachedClient       crclient.Client
 	hcpNamespace           string
 	hccoImage              string
@@ -49,9 +47,6 @@ type Reconciler struct {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req crreconcile.Request) (crreconcile.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("reconciling global pull secret")
-
 	// Reconcile GlobalPullSecret
 	if err := r.reconcileGlobalPullSecret(ctx); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile global pull secret: %w", err)
@@ -79,7 +74,14 @@ func (r *Reconciler) reconcileGlobalPullSecret(ctx context.Context) error {
 		ok                          bool
 	)
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("reconciling global pull secret")
+
+	// Create ServiceAccount for global-pull-secret-syncer
+	serviceAccount := manifests.GlobalPullSecretServiceAccount()
+	if _, err := r.CreateOrUpdate(ctx, r.hcUncachedClient, serviceAccount, func() error {
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile global pull secret service account: %w", err)
+	}
 
 	// Get the original pull secret once at the beginning (used in both scenarios)
 	originalPullSecret := manifests.PullSecret(r.hcpNamespace)
@@ -121,13 +123,6 @@ func (r *Reconciler) reconcileGlobalPullSecret(ctx context.Context) error {
 		// Generate a hash of the original pull secret content to trigger pod recreation
 		configSeed := util.HashSimple(originalPullSecretBytes)
 
-		// Label nodes that should have GlobalPullSecret DaemonSet (non-InPlace nodes)
-		// This is critical to prevent DaemonSet deployment conflicts with Machine Config Daemon
-		log.Info("labeling nodes eligible for GlobalPullSecret DaemonSet")
-		if err := r.labelNodesForGlobalPullSecret(ctx); err != nil {
-			return fmt.Errorf("failed to label nodes for GlobalPullSecret: %w", err)
-		}
-
 		// Reconcile DaemonSet with only original pull secret (global-pull-secret will be optional and empty)
 		daemonSet := manifests.GlobalPullSecretDaemonSet()
 		if err := reconcileDaemonSet(ctx, daemonSet, "", originalSecret.Name, configSeed, r.hcUncachedClient, r.CreateOrUpdate, r.hccoImage); err != nil {
@@ -135,13 +130,6 @@ func (r *Reconciler) reconcileGlobalPullSecret(ctx context.Context) error {
 		}
 
 		return nil
-	}
-
-	// Label nodes that should have GlobalPullSecret DaemonSet (non-InPlace nodes)
-	// This is critical to prevent DaemonSet deployment conflicts with Machine Config Daemon
-	log.Info("labeling nodes eligible for GlobalPullSecret DaemonSet")
-	if err := r.labelNodesForGlobalPullSecret(ctx); err != nil {
-		return fmt.Errorf("failed to label nodes for GlobalPullSecret: %w", err)
 	}
 
 	if userProvidedPullSecretBytes, err = validateAdditionalPullSecret(additionalPullSecret); err != nil {
@@ -187,88 +175,7 @@ func (r *Reconciler) reconcileGlobalPullSecret(ctx context.Context) error {
 	return nil
 }
 
-// labelNodesForGlobalPullSecret labels nodes that should receive the GlobalPullSecret DaemonSet.
-// Only nodes that do NOT belong to InPlace NodePools are labeled with hypershift.openshift.io/nodepool-globalps-enabled.
-// This ensures the DaemonSet only deploys on nodes where it won't conflict with Machine Config Daemon.
-func (r *Reconciler) labelNodesForGlobalPullSecret(ctx context.Context) error {
-	log := ctrl.LoggerFrom(ctx)
-
-	// Get all nodes from the hosted cluster
-	nodeList := &corev1.NodeList{}
-	if err := r.nodeClient.List(ctx, nodeList); err != nil {
-		return fmt.Errorf("failed to list nodes: %w", err)
-	}
-
-	// Get all MachineSets to identify which use InPlace upgrade strategy
-	machineSetList := &capiv1.MachineSetList{}
-	if err := r.cpClient.List(ctx, machineSetList, &crclient.ListOptions{
-		Namespace: r.hcpNamespace,
-	}); err != nil {
-		return fmt.Errorf("failed to list MachineSets: %w", err)
-	}
-
-	// Create set of nodes that should be labeled (from Replace NodePools)
-	nodesToLabel := make(map[string]bool)
-
-	for _, ms := range machineSetList.Items {
-		// Check if this MachineSet belongs to a NodePool with InPlace strategy
-		// This can be identified by the presence of InPlace-specific annotations
-		_, hasTargetConfig := ms.Annotations["hypershift.openshift.io/nodePoolTargetConfigVersion"]
-		_, hasCurrentConfig := ms.Annotations["hypershift.openshift.io/nodePoolCurrentConfigVersion"]
-
-		if hasTargetConfig || hasCurrentConfig {
-			// This is InPlace MachineSet - skip its nodes
-			continue
-		}
-
-		// This is Replace MachineSet - include its nodes for labeling
-		machines := &capiv1.MachineList{}
-		if err := r.cpClient.List(ctx, machines, &crclient.ListOptions{
-			Namespace:     ms.Namespace,
-			LabelSelector: labels.SelectorFromSet(ms.Spec.Selector.MatchLabels),
-		}); err != nil {
-			return fmt.Errorf("failed to list machines for Replace MachineSet %s: %w", ms.Name, err)
-		}
-
-		// Mark nodes from this Replace MachineSet for labeling
-		for _, machine := range machines.Items {
-			if machine.Status.NodeRef != nil {
-				nodesToLabel[machine.Status.NodeRef.Name] = true
-			}
-		}
-	}
-
-	// Update labels only on nodes from Replace NodePools
-	// These nodes are eligible for GlobalPullSecret DaemonSet scheduling
-	for _, node := range nodeList.Items {
-		if nodesToLabel[node.Name] {
-			// Node belongs to a Replace NodePool, so it's eligible for GlobalPS
-			nodeCopy := node.DeepCopy()
-
-			if nodeCopy.Labels == nil {
-				nodeCopy.Labels = make(map[string]string)
-			}
-
-			currentLabel := nodeCopy.Labels[globalPSLabelKey]
-
-			if currentLabel != "true" {
-				nodeCopy.Labels[globalPSLabelKey] = "true"
-				log.Info("labeling node as eligible for GlobalPullSecret DaemonSet", "node", node.Name)
-
-				if err := r.nodeClient.Update(ctx, nodeCopy); err != nil {
-					return fmt.Errorf("failed to update node labels for GlobalPullSecret eligibility on node %s: %w", node.Name, err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 func reconcileDaemonSet(ctx context.Context, daemonSet *appsv1.DaemonSet, globalPullSecretName string, originalPullSecretName string, configSeed string, c crclient.Client, createOrUpdate upsert.CreateOrUpdateFN, hccoImage string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Reconciling global pull secret daemon set")
-
 	if _, err := createOrUpdate(ctx, c, daemonSet, func() error {
 		daemonSet.Spec = appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
@@ -284,6 +191,7 @@ func reconcileDaemonSet(ctx context.Context, daemonSet *appsv1.DaemonSet, global
 					},
 				},
 				Spec: corev1.PodSpec{
+					ServiceAccountName:           manifests.GlobalPullSecretDSName,
 					AutomountServiceAccountToken: ptr.To(false),
 					SecurityContext:              &corev1.PodSecurityContext{},
 					DNSPolicy:                    corev1.DNSDefault,
@@ -437,16 +345,16 @@ func buildGlobalPSVolumeMounts(globalPullSecretName string) []corev1.VolumeMount
 	return volumeMounts
 }
 
-// buildGlobalPSVolumes creates volumes for the GlobalPullSecret DaemonSet using util.BuildVolume pattern
+// buildGlobalPSVolumes creates volumes for the GlobalPullSecret DaemonSet using podspec.BuildVolume pattern
 func buildGlobalPSVolumes(globalPullSecretName string, originalPullSecretName string) []corev1.Volume {
 	var volumes []corev1.Volume
 
-	volumes = append(volumes, util.BuildVolume(globalPSVolumeKubeletConfig(), buildGlobalPSVolumeKubeletConfig))
-	volumes = append(volumes, util.BuildVolume(globalPSVolumeDbus(), buildGlobalPSVolumeDbus))
-	volumes = append(volumes, util.BuildVolume(globalPSVolumeOriginalPullSecret(), buildGlobalPSVolumeOriginalPullSecret(originalPullSecretName)))
+	volumes = append(volumes, podspec.BuildVolume(globalPSVolumeKubeletConfig(), buildGlobalPSVolumeKubeletConfig))
+	volumes = append(volumes, podspec.BuildVolume(globalPSVolumeDbus(), buildGlobalPSVolumeDbus))
+	volumes = append(volumes, podspec.BuildVolume(globalPSVolumeOriginalPullSecret(), buildGlobalPSVolumeOriginalPullSecret(originalPullSecretName)))
 
 	if globalPullSecretName != "" {
-		volumes = append(volumes, util.BuildVolume(globalPSVolumeGlobalPullSecret(), buildGlobalPSVolumeGlobalPullSecret(globalPullSecretName)))
+		volumes = append(volumes, podspec.BuildVolume(globalPSVolumeGlobalPullSecret(), buildGlobalPSVolumeGlobalPullSecret(globalPullSecretName)))
 	}
 
 	return volumes

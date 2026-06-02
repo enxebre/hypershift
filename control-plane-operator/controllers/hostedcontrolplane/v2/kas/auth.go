@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
-	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/featuregates"
 	component "github.com/openshift/hypershift/support/controlplane-component"
 	"github.com/openshift/hypershift/support/supportedversion"
@@ -35,7 +36,7 @@ func adaptAuthConfig(cpContext component.WorkloadContext, config *corev1.ConfigM
 		return nil
 	}
 
-	authConfig, err := generateAuthConfig(cpContext, cpContext.Client, cpContext.HCP)
+	authConfig, err := GenerateAuthConfig(cpContext, cpContext.HCP.Spec.Configuration.Authentication, cpContext.Client, cpContext.HCP.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to generate authentication config: %w", err)
 	}
@@ -57,7 +58,11 @@ func adaptAuthConfig(cpContext component.WorkloadContext, config *corev1.ConfigM
 	return nil
 }
 
-func generateAuthConfig(ctx context.Context, c crclient.Reader, hcp *hyperv1.HostedControlPlane) (*AuthenticationConfiguration, error) {
+func GenerateAuthConfig(ctx context.Context, spec *configv1.AuthenticationSpec, c crclient.Reader, namespace string) (*AuthenticationConfiguration, error) {
+	if spec == nil {
+		return nil, fmt.Errorf("authentication spec cannot be nil")
+	}
+
 	config := &AuthenticationConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AuthenticationConfiguration",
@@ -66,8 +71,8 @@ func generateAuthConfig(ctx context.Context, c crclient.Reader, hcp *hyperv1.Hos
 		JWT: []JWTAuthenticator{},
 	}
 
-	for _, provider := range hcp.Spec.Configuration.Authentication.OIDCProviders {
-		jwt, err := generateJWTForProvider(ctx, provider, c, hcp.Namespace)
+	for _, provider := range spec.OIDCProviders {
+		jwt, err := generateJWTForProvider(ctx, provider, c, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("generating JWT authenticator for provider %q: %v", provider.Name, err)
 		}
@@ -94,10 +99,17 @@ func generateJWTForProvider(ctx context.Context, provider configv1.OIDCProvider,
 		return out, fmt.Errorf("generating claim validation rules: %v", err)
 	}
 
+	if featuregates.Gate().Enabled(featuregates.ExternalOIDCWithUpstreamParity) {
+		userValidationRules, err := generateUserValidationRules(provider.UserValidationRules...)
+		if err != nil {
+			return out, fmt.Errorf("generating userValidationRules for provider %q: %v", provider.Name, err)
+		}
+		out.UserValidationRules = userValidationRules
+	}
+
 	out.Issuer = issuer
 	out.ClaimMappings = claimMappings
 	out.ClaimValidationRules = claimValidationRules
-
 	return out, nil
 }
 
@@ -109,6 +121,35 @@ func generateIssuer(ctx context.Context, issuer configv1.TokenIssuer, client crc
 
 	for _, audience := range issuer.Audiences {
 		out.Audiences = append(out.Audiences, string(audience))
+	}
+
+	if featuregates.Gate().Enabled(featuregates.ExternalOIDCWithUpstreamParity) {
+		if len(issuer.DiscoveryURL) > 0 {
+			// Validate the URL scheme
+			u, err := url.Parse(issuer.DiscoveryURL)
+			if err != nil {
+				return out, fmt.Errorf("invalid discovery URL: %v", err)
+			}
+			if strings.TrimRight(issuer.DiscoveryURL, "/") == strings.TrimRight(issuer.URL, "/") {
+				return out, fmt.Errorf("discovery URL must not be identical to issuer URL")
+			}
+			if u.Scheme != "https" {
+				return out, fmt.Errorf("discovery URL must use https, got %q", u.Scheme)
+			}
+			if u.Host == "" {
+				return out, fmt.Errorf("discovery URL must include a host")
+			}
+			if u.User != nil {
+				return out, fmt.Errorf("discovery URL must not contain user info")
+			}
+			if len(u.RawQuery) > 0 {
+				return out, fmt.Errorf("discovery URL must not contain a query string")
+			}
+			if len(u.Fragment) > 0 {
+				return out, fmt.Errorf("discovery URL must not contain a fragment")
+			}
+			out.DiscoveryURL = issuer.DiscoveryURL
+		}
 	}
 
 	if len(issuer.CertificateAuthority.Name) > 0 {
@@ -144,7 +185,10 @@ func generateClaimMappings(claimMappings configv1.TokenClaimMappings, issuerURL 
 		return out, fmt.Errorf("generating username claim mapping: %v", err)
 	}
 
-	groups := generateGroupsClaimMapping(claimMappings.Groups)
+	groups, err := generateGroupsClaimMapping(claimMappings.Groups)
+	if err != nil {
+		return out, fmt.Errorf("generating groups claim mapping: %v", err)
+	}
 
 	out.Username = username
 	out.Groups = groups
@@ -168,11 +212,63 @@ func generateClaimMappings(claimMappings configv1.TokenClaimMappings, issuerURL 
 }
 
 func generateUsernameClaimMapping(username configv1.UsernameClaimMapping, issuerURL string) (PrefixedClaimOrExpression, error) {
+	if featuregates.Gate().Enabled(featuregates.ExternalOIDCWithUpstreamParity) {
+		return generateUsernameClaimMappingWithParity(username, issuerURL)
+	}
+	return generateUsernameClaimMappingLegacy(username, issuerURL)
+}
+
+func generateUsernameClaimMappingWithParity(username configv1.UsernameClaimMapping, issuerURL string) (PrefixedClaimOrExpression, error) {
 	out := PrefixedClaimOrExpression{}
 
-	// Currently, the authentications.config.openshift.io CRD only allows setting a claim for the mapping
-	// and does not allow setting a CEL expression like the upstream. This is likely to change in the future,
-	// but for now just set the claim.
+	if len(username.Expression) == 0 && len(username.Claim) == 0 {
+		return out, fmt.Errorf("claim or expression field is empty in username claim mapping")
+	}
+
+	if len(username.Expression) > 0 && len(username.Claim) > 0 {
+		return out, fmt.Errorf("username claim mapping must not set both claim and expression")
+	}
+
+	if len(username.Expression) > 0 && username.PrefixPolicy == configv1.Prefix {
+		return out, fmt.Errorf("username claim mappings cannot have a prefix set when using an expression based mapping. When using an expression mapping, set the prefix in the expression")
+	}
+
+	if len(username.Expression) > 0 {
+		out.Expression = username.Expression
+		return out, nil
+	}
+
+	if len(username.Claim) > 0 {
+		out.Claim = username.Claim
+
+		switch username.PrefixPolicy {
+		case configv1.Prefix:
+			if username.Prefix == nil {
+				return out, fmt.Errorf("nil username prefix while policy expects one")
+			}
+			out.Prefix = &username.Prefix.PrefixString
+		case configv1.NoPrefix:
+			out.Prefix = ptr.To("")
+		case configv1.NoOpinion:
+			prefix := ""
+			if username.Claim != "email" {
+				prefix = fmt.Sprintf("%s#", issuerURL)
+			}
+			out.Prefix = &prefix
+		default:
+			return out, fmt.Errorf("invalid username prefix policy: %s", username.PrefixPolicy)
+		}
+	}
+
+	return out, nil
+}
+
+func generateUsernameClaimMappingLegacy(username configv1.UsernameClaimMapping, issuerURL string) (PrefixedClaimOrExpression, error) {
+	out := PrefixedClaimOrExpression{}
+
+	if len(username.Claim) == 0 {
+		return out, fmt.Errorf("username claim is required but an empty value was provided")
+	}
 	out.Claim = username.Claim
 
 	switch username.PrefixPolicy {
@@ -196,16 +292,27 @@ func generateUsernameClaimMapping(username configv1.UsernameClaimMapping, issuer
 	return out, nil
 }
 
-func generateGroupsClaimMapping(groups configv1.PrefixedClaimMapping) PrefixedClaimOrExpression {
+func generateGroupsClaimMapping(groups configv1.PrefixedClaimMapping) (PrefixedClaimOrExpression, error) {
 	out := PrefixedClaimOrExpression{}
+	if featuregates.Gate().Enabled(featuregates.ExternalOIDCWithUpstreamParity) {
+		if len(groups.Expression) > 0 && len(groups.Claim) > 0 {
+			return out, fmt.Errorf("groups claim mapping must not set both claim and expression")
+		}
 
-	// Currently, the authentications.config.openshift.io CRD only allows setting a claim for the mapping
-	// and does not allow setting a CEL expression like the upstream. This is likely to change in the future,
-	// but for now just set the claim.
+		if len(groups.Expression) > 0 && len(groups.Prefix) > 0 {
+			return out, fmt.Errorf("groups claim mapping must not set prefix when expression is set")
+		}
+
+		if len(groups.Expression) > 0 {
+			out.Expression = groups.Expression
+			return out, nil
+		}
+	}
+
 	out.Claim = groups.Claim
 	out.Prefix = &groups.Prefix
 
-	return out
+	return out, nil
 }
 
 func generateUIDClaimMapping(uid *configv1.TokenClaimOrExpressionMapping) (ClaimOrExpression, error) {
@@ -290,14 +397,50 @@ func generateClaimValidationRule(claimValidationRule configv1.TokenClaimValidati
 		if claimValidationRule.RequiredClaim == nil {
 			return out, fmt.Errorf("claimValidationRule.type is %s and requiredClaim is not set", configv1.TokenValidationRuleTypeRequiredClaim)
 		}
-
 		out.Claim = claimValidationRule.RequiredClaim.Claim
 		out.RequiredValue = claimValidationRule.RequiredClaim.RequiredValue
+		return out, nil
+	case configv1.TokenValidationRuleTypeCEL:
+		if len(claimValidationRule.CEL.Expression) == 0 {
+			return out, fmt.Errorf("claimValidationRule.type is %s and expression is not set", configv1.TokenValidationRuleTypeCEL)
+		}
+		out.Expression = claimValidationRule.CEL.Expression
+		out.Message = claimValidationRule.CEL.Message
+		return out, nil
 	default:
 		return out, fmt.Errorf("unknown claimValidationRule type %q", claimValidationRule.Type)
 	}
+}
+
+func generateUserValidationRules(rules ...configv1.TokenUserValidationRule) ([]UserValidationRule, error) {
+	out := []UserValidationRule{}
+	errs := []error{}
+
+	for _, r := range rules {
+		uvr, err := generateUserValidationRule(r)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("generating userValidationRule: %v", err))
+			continue
+		}
+		out = append(out, uvr)
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
 
 	return out, nil
+}
+
+func generateUserValidationRule(rule configv1.TokenUserValidationRule) (UserValidationRule, error) {
+	if len(rule.Expression) == 0 {
+		return UserValidationRule{}, fmt.Errorf("userValidationRule expression must be non-empty")
+	}
+
+	return UserValidationRule{
+		Expression: rule.Expression,
+		Message:    rule.Message,
+	}, nil
 }
 
 func validateAuthConfig(authConfig *AuthenticationConfiguration, disallowIssuers []string) error {
@@ -322,7 +465,7 @@ func validateAuthConfig(authConfig *AuthenticationConfiguration, disallowIssuers
 	if err != nil {
 		return fmt.Errorf("parsing kubernetes version %q", kubeVersion.String())
 	}
-	celCompiler := authenticationcel.NewCompiler(environment.MustBaseEnvSet(envVersion, true))
+	celCompiler := authenticationcel.NewCompiler(environment.MustBaseEnvSet(envVersion))
 
 	apiServerAuthConfig, err := HCPAuthConfigToAPIServerAuthConfig(authConfig)
 	if err != nil {

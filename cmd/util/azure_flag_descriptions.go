@@ -35,7 +35,13 @@ const (
 	SATokenIssuerKeyPathDescription   = "Path to the RSA private key file used to sign service account tokens. Required for OIDC-based workload identity authentication."
 	AutoAssignRolesDescription        = "Automatically assign required Azure RBAC roles to workload identities. This grants the identities permissions to manage Azure resources (DNS, networking, storage) for the cluster."
 
+	// Private connectivity / endpoint access
+	EndpointAccessDescription                                      = "Endpoint access type: Public, PublicAndPrivate, or Private."
+	EndpointAccessPrivateNATSubnetIDDescription                    = "Azure resource ID of the subnet used for Private Link Service NAT IP allocation (the subnet must have privateLinkServiceNetworkPolicies disabled)."
+	EndpointAccessPrivateAdditionalAllowedSubscriptionsDescription = "Additional Azure subscription IDs permitted to create Private Endpoints (the guest cluster's own subscription is always automatically allowed)."
+
 	// Encryption
+	EnableKMSDescription           = "Create a KMS workload identity for Azure Key Vault KMS encryption. Use this when the cluster will be configured with --encryption-key-id."
 	EncryptionKeyIDDescription     = "Azure Key Vault key identifier used to encrypt etcd data via KMSv2 (format: https://<vault>.vault.azure.net/keys/<key>/<version>)."
 	EncryptionAtHostDescription    = "Enable host-based encryption for VM disks and temp disks. Valid values: Enabled, Disabled."
 	DiskEncryptionSetIDDescription = "Full resource ID of an Azure Disk Encryption Set used to encrypt NodePool OS disks with customer-managed keys."
@@ -66,4 +72,17 @@ const (
 	LocationDestroyDescription          = "Azure region of the cluster. Inferred from the HostedCluster if it exists; only required if the cluster resource has already been deleted."
 	AzureCredsDestroyDescription        = "Path to an Azure credentials file (JSON format) used to authenticate and delete Azure resources."
 	ResourceGroupNameDestroyDescription = "Name of the resource group containing the cluster resources to delete. Inferred from the HostedCluster if it exists; only required if the cluster resource has already been deleted."
+	DNSZoneRGNameDestroyDescription     = "Name of the resource group containing the Azure DNS zone (required). Used to clean up DNS zone role assignments during cluster or IAM destruction."
+
+	// Infrastructure command specific flags
+	AssignIdentityRolesDescription          = "Automatically assign required Azure RBAC roles to workload identities. This grants the identities permissions to manage Azure resources."
+	DisableClusterCapabilitiesDescription   = "Comma-separated list of cluster capabilities to disable (e.g. ImageRegistry). Disabled capabilities will not have corresponding workload identities created."
+	InfraIDDescription                      = "Unique identifier used to name and tag Azure resources. This ID will be incorporated into resource names and Azure tags."
+	BaseDomainInfraDescription              = "Base DNS domain for the cluster (e.g. example.com). A public DNS zone for this domain must exist in your Azure subscription."
+	InfraOutputFileDescription              = "Path to file where the infrastructure output will be saved in YAML format. Contains resource IDs and other information needed for cluster creation."
+	WorkloadIdentitiesOutputFileDescription = "Path where generated workload identities JSON will be saved. This output file can be passed to 'hypershift create infra azure' using --workload-identities-file."
+
+	// Common flags
+	NameDescription  = "A name for the HostedCluster. This name is used to identify resources and must be unique within the namespace."
+	CloudDescription = "Azure cloud environment. Valid values: AzurePublicCloud, AzureUSGovernmentCloud, AzureChinaCloud."
 )

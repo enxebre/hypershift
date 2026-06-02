@@ -57,11 +57,19 @@ This phase creates the foundational security infrastructure required for your ho
 - **OIDC Issuer**: Configures an OIDC issuer in Azure Blob Storage for service account token validation
 - **Federated Credentials**: Establishes trust relationships between Azure Entra ID and OpenShift service accounts
 
+You can create workload identities using either:
+
+- **HyperShift CLI** (recommended): `hypershift create iam azure` - automates identity and federated credential creation
+- **Azure CLI**: Manual `az identity` and `az identity federated-credential` commands
+
 **Why This Matters**: Without these identities and federated credentials, your hosted cluster components cannot authenticate with Azure APIs to provision storage, manage load balancers, configure networking, or perform other essential cloud operations. Using workload identities instead of traditional service principals provides better security, automatic credential rotation, and follows Azure's modern authentication best practices.
 
 **When to Complete**: This is a one-time setup that can be reused across multiple hosted clusters. Complete this before proceeding to Phase 2.
 
-👉 **Guide**: [Azure Workload Identity Setup](azure-workload-identity-setup.md)
+👉 **Guides**:
+
+- [Azure Workload Identity Setup](azure-workload-identity-setup.md) - Overview with CLI and OIDC configuration
+- [Create Azure IAM Resources Separately](create-iam-separately.md) - Detailed IAM command reference
 
 ### Phase 2: Management Cluster Setup
 
@@ -88,6 +96,7 @@ This phase creates your actual hosted OpenShift clusters:
 - **Infrastructure Provisioning**: Creates resource groups, VNets, subnets, and network security groups
 - **HostedCluster Creation**: Deploys the control plane on the management cluster and worker nodes in your Azure subscription
 - **Workload Identity Integration**: Links the hosted cluster to the workload identities created in Phase 1
+- **Private Endpoint Access** (Optional): Configures Azure Private Link for private API server connectivity
 
 **Why This Matters**: This is where you deploy the actual OpenShift clusters that your applications will run on. Each hosted cluster gets its own control plane running on the management cluster and its own set of worker node VMs in Azure. The cluster uses the workload identities from Phase 1 to securely access Azure services without storing credentials.
 
@@ -153,14 +162,17 @@ Self-managed Azure HyperShift implements several security best practices:
 2. **Least Privilege Access**: Each component gets its own managed identity with minimal required permissions
 3. **Network Isolation**: Custom VNets and NSGs allow you to implement network segmentation and security policies
 4. **Federated Credentials**: Trust relationships are scoped to specific service accounts, preventing unauthorized access
+5. **Private Connectivity** (Optional): Azure Private Link provides private API server access, ensuring control plane traffic never traverses the public internet. See [Deploy Azure Private Clusters](deploy-azure-private-clusters.md)
 
 ## Next Steps
 
 Begin your self-managed Azure HyperShift deployment by following the guides in order:
 
-1. **[Azure Workload Identity Setup](azure-workload-identity-setup.md)** - Set up managed identities and OIDC federation
+1. **[Azure Workload Identity Setup](azure-workload-identity-setup.md)** - Set up managed identities and OIDC federation (or use [Create Azure IAM Resources Separately](create-iam-separately.md) for CLI-based setup)
 2. **[Setup Azure Management Cluster for HyperShift](setup-management-cluster.md)** - Install HyperShift operator (with or without External DNS)
 3. **[Create a Self-Managed Azure HostedCluster](create-self-managed-azure-cluster.md)** - Deploy your first hosted cluster
+4. **[Deploy Azure Private Clusters](deploy-azure-private-clusters.md)** (Optional) - Configure private endpoint access with Azure Private Link
+5. **[Autoscaling](autoscaling-self-managed.md)** - Configure node pool and cluster autoscaling
 
 Each guide includes sections for both DNS approaches - simply follow the sections that match your choice.
 

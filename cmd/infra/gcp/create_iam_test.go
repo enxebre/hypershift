@@ -48,14 +48,24 @@ func TestValidateInputs(t *testing.T) {
 			expectedError: "project-id is required",
 		},
 		{
-			name: "When oidc-jwks-file is missing it should return error",
+			name: "When neither oidc-jwks-file nor oidc-issuer-url is provided it should return error",
 			opts: &CreateIAMOptions{
 				InfraID:             "test-infra-id",
 				ProjectID:           "test-project-id",
 				ClusterOIDCJWKSFile: "",
+				OIDCIssuerURL:       "",
 			},
 			setupJWKSFile: false,
-			expectedError: "oidc-jwks-file is required",
+			expectedError: "at least one of --oidc-jwks-file or --oidc-issuer-url is required",
+		},
+		{
+			name: "When only oidc-issuer-url is provided it should pass validation",
+			opts: &CreateIAMOptions{
+				InfraID:       "test-infra-id",
+				ProjectID:     "test-project-id",
+				OIDCIssuerURL: "https://oidc.example.com/my-cluster",
+			},
+			setupJWKSFile: false,
 		},
 		{
 			name: "When JWKS validation fails it should return error",
@@ -68,7 +78,7 @@ func TestValidateInputs(t *testing.T) {
 			expectedError: "invalid JWKS file",
 		},
 		{
-			name: "When all fields including optional OIDCIssuerURL are provided it should pass validation",
+			name: "When both oidc-jwks-file and oidc-issuer-url are provided it should pass validation",
 			opts: &CreateIAMOptions{
 				InfraID:       "test-infra-id",
 				ProjectID:     "test-project-id",
@@ -166,6 +176,8 @@ func TestOutput(t *testing.T) {
 					"nodepool-mgmt":    "my-cluster-infra-nodepool-mgmt@my-gcp-project.iam.gserviceaccount.com",
 					"ctrlplane-op":     "my-cluster-infra-ctrlplane-op@my-gcp-project.iam.gserviceaccount.com",
 					"cloud-controller": "my-cluster-infra-cloud-controller@my-gcp-project.iam.gserviceaccount.com",
+					"gcp-pd-csi":       "my-cluster-infra-gcp-pd-csi@my-gcp-project.iam.gserviceaccount.com",
+					"image-registry":   "my-cluster-infra-image-registry@my-gcp-project.iam.gserviceaccount.com",
 				},
 			},
 			validateJSON: true,

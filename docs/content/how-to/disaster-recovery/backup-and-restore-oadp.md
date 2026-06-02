@@ -8,25 +8,7 @@ In this section, we will outline the procedures for performing disaster recovery
 
 ## Pre-requisites
 
-The first consideration is to ensure we meet the prerequisites. On the Management cluster, whether it is Connected or Disconnected, we require:
-
-- A valid StorageClass.
-- Cluster-admin access.
-- Access to the openshift-adp subscription through a CatalogSource.
-- Access to online storage compatible with the openshift-adp cloud storage providers (S3, Azure, GCP, Minio, etc.).
-- The HostedControlPlane pods should be accessible and functioning correctly.
-- **(Bare Metal Provider Only)** As the InfraEnv has a different lifecycle than the HostedCluster, it should reside in a namespace separate from that of the HostedControlPlane and should not be deleted during the backup/restore procedures.
-
-!!! warning "⚠️ HostedCluster Configuration"
-
-    The HostedCluster must be configured as `PublicAndPrivate` or `Private`. Public clusters without a hostname will cause restore failures. See [HostedCluster Configuration Requirements](#hostedcluster-configuration-requirements) for details.
-
-
-!!! important
-
-    Before proceeding further, two crucial points must be noted:
-    1. Restoration will occur in a green field environment, signifying that after the HostedCluster has been backed up, it must be destroyed to initiate the restoration process.
-    2. Node reprovisioning will take place, necessitating the backup of workloads in the Data Plane before deleting the HostedCluster..
+Please review the [Disaster Recovery Prerequisites](prerequisites.md) page before proceeding. It covers all general requirements, HostedCluster service publishing strategy configuration (critical for cross-management-cluster restore), and platform-specific considerations.
 
 ## Openshift-adp deployment
 
@@ -882,54 +864,7 @@ velero delete backup hc-clusters-hosted-backup
 
     If you modify the folder structure of the remote storage where your backups are hosted, you may encounter issues with `backuprepositories.velero.io`. In such cases, you will need to recreate all the associated objects, including DPAs, backups, restores, etc.
 
-## HostedCluster Configuration Requirements for AWS provider
+## HostedCluster Configuration Requirements
 
-The HostedCluster must be configured as `PublicAndPrivate` or `Private` for backup/restore operations to work correctly. If the HostedCluster is configured as Public (without a hostname in the ServicePublishingStrategy for the kube-api-server), the restore operation will fail with the following consequences:
-
-- **Nodes remain in NotReady state**
-- **NodePool scaling fails to generate new nodes**
-
-### Root Cause
-
-The issue occurs because:
-
-- Nodes store the ELB (Elastic Load Balancer) address in their kubelet configuration, which is ephemeral and changes when the cluster is deleted and restored
-- The SAN (Subject Alternative Name) in the certificate fails because the certificate name no longer matches the new ELB
-- Original nodes cannot connect to the ControlPlane because they point to the old ELB, and even if they pointed to the new one, the certificate would be incorrect
-
-### Solution
-
-Ensure your HostedCluster is configured with either:
-
-- `PublicAndPrivate` service publishing strategy, OR
-- `Private` service publishing strategy, OR
-- `Public` service publishing strategy with a **hostname** specified for the kube-api-server
-
-### Example Configuration
-
-**Option 1: PublicAndPrivate or Private**
-```yaml
-spec:
-  platform:
-    aws:
-      endpointAccess: PublicAndPrivate  # or Private
-```
-
-**Option 2: Public with hostname**
-```yaml
-spec:
-...
-...
-  platform:
-      aws:
-        endpointAccess: Public
-...
-...
-  services:
-  - service: APIServer
-    servicePublishingStrategy:
-      type: LoadBalancer
-      loadBalancer:
-        hostname: api.basedomain.tld
-```
+For detailed information about HostedCluster service publishing strategy requirements, including example configurations and platform-specific considerations, see the [Disaster Recovery Prerequisites](prerequisites.md#hostedcluster-service-publishing-strategy-requirements) page.
 

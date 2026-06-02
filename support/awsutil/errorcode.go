@@ -3,18 +3,19 @@ package awsutil
 import (
 	"errors"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/smithy-go"
 )
 
 const (
 	AuthFailure           = "AuthFailure"
+	DependencyViolation   = "DependencyViolation"
 	UnauthorizedOperation = "UnauthorizedOperation"
 )
 
 func AWSErrorCode(err error) string {
-	var awsErr awserr.Error
-	if errors.As(err, &awsErr) {
-		return awsErr.Code()
+	var smithyErr smithy.APIError
+	if errors.As(err, &smithyErr) {
+		return smithyErr.ErrorCode()
 	}
 	return "Unknown"
 }

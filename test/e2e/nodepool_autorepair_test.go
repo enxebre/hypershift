@@ -8,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	. "github.com/onsi/gomega"
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	awsutil "github.com/openshift/hypershift/cmd/infra/aws/util"
@@ -62,15 +61,15 @@ func (ar *NodePoolAutoRepairTest) Run(t *testing.T, nodePool hyperv1.NodePool, n
 	g := NewWithT(t)
 
 	// Terminate one of the machines belonging to the cluster
-	t.Log("Terminating AWS Instance with a autorepair NodePool")
+	t.Log("Terminating AWS Instance with an autorepair NodePool")
 	nodeToReplace := nodes[0].Name
 	awsSpec := nodes[0].Spec.ProviderID
 	g.Expect(len(awsSpec)).NotTo(BeZero())
 	instanceID := awsSpec[strings.LastIndex(awsSpec, "/")+1:]
-	t.Logf("Terminating AWS instance: %s", instanceID)
+	t.Logf("Terminating AWS instance: %s (node: %s)", instanceID, nodeToReplace)
 	ec2client := ec2Client(ar.clusterOpts.AWSPlatform.Credentials.AWSCredentialsFile, ar.clusterOpts.AWSPlatform.Region)
-	_, err := ec2client.TerminateInstancesWithContext(ar.ctx, &ec2.TerminateInstancesInput{
-		InstanceIds: []*string{aws.String(instanceID)},
+	_, err := ec2client.TerminateInstances(ar.ctx, &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
 	})
 	g.Expect(err).NotTo(HaveOccurred(), "failed to terminate AWS instance")
 
@@ -94,11 +93,35 @@ func (ar *NodePoolAutoRepairTest) Run(t *testing.T, nodePool hyperv1.NodePool, n
 				return true, fmt.Sprintf("node %s replaced", nodeToReplace), nil
 			},
 		),
+		// Ensure replacement nodes are free of kubelet pressure conditions
+		// (MemoryPressure, DiskPressure, PIDPressure). A replacement node
+		// can be NodeReady=True but still have pressure conditions, which
+		// causes CAPI to set MachineNodeHealthyCondition=False
+		// (NodeConditionsFailed). This makes the NodePool's AllNodesHealthy
+		// condition False and fails validateNodePoolConditions downstream.
+		// By checking pressure conditions here, we wait for the replacement
+		// node to be fully healthy before proceeding.
+		e2eutil.WithPredicates(
+			e2eutil.ConditionPredicate[*corev1.Node](e2eutil.Condition{
+				Type:   string(corev1.NodeMemoryPressure),
+				Status: metav1.ConditionFalse,
+			}),
+			e2eutil.ConditionPredicate[*corev1.Node](e2eutil.Condition{
+				Type:   string(corev1.NodeDiskPressure),
+				Status: metav1.ConditionFalse,
+			}),
+			e2eutil.ConditionPredicate[*corev1.Node](e2eutil.Condition{
+				Type:   string(corev1.NodePIDPressure),
+				Status: metav1.ConditionFalse,
+			}),
+		),
 	)
 }
 
-func ec2Client(awsCredsFile, region string) *ec2.EC2 {
-	awsSession := awsutil.NewSession("hypershift-e2e", awsCredsFile, "", "", region)
+func ec2Client(awsCredsFile, region string) *ec2.Client {
+	awsSession := awsutil.NewSession(context.Background(), "hypershift-e2e", awsCredsFile, "", "", region)
 	awsConfig := awsutil.NewConfig()
-	return ec2.New(awsSession, awsConfig)
+	return ec2.NewFromConfig(*awsSession, func(o *ec2.Options) {
+		o.Retryer = awsConfig()
+	})
 }

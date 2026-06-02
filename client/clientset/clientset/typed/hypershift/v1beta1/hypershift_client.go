@@ -27,8 +27,10 @@ import (
 
 type HypershiftV1beta1Interface interface {
 	RESTClient() rest.Interface
+	AzurePrivateLinkServicesGetter
 	CertificateSigningRequestApprovalsGetter
 	GCPPrivateServiceConnectsGetter
+	HCPEtcdBackupsGetter
 	HostedClustersGetter
 	HostedControlPlanesGetter
 	NodePoolsGetter
@@ -39,12 +41,20 @@ type HypershiftV1beta1Client struct {
 	restClient rest.Interface
 }
 
+func (c *HypershiftV1beta1Client) AzurePrivateLinkServices(namespace string) AzurePrivateLinkServiceInterface {
+	return newAzurePrivateLinkServices(c, namespace)
+}
+
 func (c *HypershiftV1beta1Client) CertificateSigningRequestApprovals(namespace string) CertificateSigningRequestApprovalInterface {
 	return newCertificateSigningRequestApprovals(c, namespace)
 }
 
 func (c *HypershiftV1beta1Client) GCPPrivateServiceConnects(namespace string) GCPPrivateServiceConnectInterface {
 	return newGCPPrivateServiceConnects(c, namespace)
+}
+
+func (c *HypershiftV1beta1Client) HCPEtcdBackups(namespace string) HCPEtcdBackupInterface {
+	return newHCPEtcdBackups(c, namespace)
 }
 
 func (c *HypershiftV1beta1Client) HostedClusters(namespace string) HostedClusterInterface {

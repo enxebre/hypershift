@@ -45,12 +45,10 @@ func main() {
 	client, err := template.New("client").Funcs(
 		template.FuncMap{
 			"ToIfaceName": func(input string) string {
-				switch input {
-				case "route53":
-					return "Route53"
-				default:
-					return strings.ToUpper(input)
+				if name, ok := serviceIfaceNames[input]; ok {
+					return name
 				}
+				return strings.ToUpper(input)
 			},
 			"ToName": func(input string) string { // snake-case to camelCase
 				output := strings.Builder{}
@@ -69,26 +67,6 @@ func main() {
 				}
 				return output.String()
 			},
-			"Output": func(group, api string) string {
-				outputType := api + "Output"
-				switch group {
-				case "ec2":
-					switch api {
-					case "AttachVolume":
-						outputType = "VolumeAttachment"
-					case "DetachVolume":
-						outputType = "VolumeAttachment"
-					case "CreateVolume":
-						outputType = "Volume"
-					case "CreateSnapshot":
-						outputType = "Snapshot"
-					case "RunInstances":
-						outputType = "Reservation"
-					}
-				}
-				return group + "." + outputType
-			},
-			"IsV2Service": isV2Service,
 		}).Parse(`package aws
 
 import (
@@ -98,19 +76,11 @@ import (
     awsutil "github.com/openshift/hypershift/cmd/infra/aws/util"
 	"github.com/openshift/hypershift/support/awsapi"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	configv2 "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/config"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
 {{- range $service := .Services }}
-	{{- if IsV2Service $service }}
-	{{$service}}v2 "github.com/aws/aws-sdk-go-v2/service/{{$service}}"
-	{{- else }}
-	"github.com/aws/aws-sdk-go/service/{{$service}}"
-	"github.com/aws/aws-sdk-go/service/{{$service}}/{{$service}}iface"
-	{{- end }}
+	"github.com/aws/aws-sdk-go-v2/service/{{$service}}"
 {{- end}}
 )
 
@@ -122,59 +92,29 @@ func NewDelegatingClient (
 {{- end}}
 ) (*DelegatingClient, error) {
 	awsConfig := awsutil.NewConfig()
-	awsConfigv2 := awsutil.NewConfigV2()
 {{- range $name := $.Delegates }}
 	{{- with $services := $name | index $.DelegatesByName }}
-	{{- $hasV1 := false }}
-	{{- $hasV2 := false }}
-	{{- range $service, $apis := $services }}
-		{{- if IsV2Service $service }}
-			{{- $hasV2 = true }}
-		{{- else }}
-			{{- $hasV1 = true }}
-		{{- end }}
-	{{- end }}
-	{{- if $hasV1 }}
-	{{$name | ToName}}Session, err := session.NewSessionWithOptions(session.Options{SharedConfigFiles: []string{ {{- $name | ToName}}CredentialsFile}})
-	if err != nil {
-		return nil, fmt.Errorf("error creating new AWS session for {{$name | ToName}}: %w", err)
-	}
-	{{$name | ToName}}Session.Handlers.Build.PushBackNamed(request.NamedHandler{
-		Name: "openshift.io/hypershift",
-		Fn:   request.MakeAddToUserAgentHandler("openshift.io hypershift", "{{$name}}"),
-	})
-	{{- end }}
-	{{- if $hasV2 }}
-	{{$name | ToName}}Cfg, err := configv2.LoadDefaultConfig(ctx,
-		configv2.WithSharedConfigFiles([]string{ {{- $name | ToName}}CredentialsFile}),
-		configv2.WithAPIOptions([]func(*middleware.Stack) error{
+	{{$name | ToName}}Cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithSharedConfigFiles([]string{ {{- $name | ToName}}CredentialsFile}),
+		config.WithAPIOptions([]func(*middleware.Stack) error{
 			awsmiddleware.AddUserAgentKeyValue("openshift.io hypershift", "{{$name}}"),
 		}))
 	if err != nil {
 		return nil, fmt.Errorf("error loading AWS config for {{$name | ToName}}: %w", err)
 	}
-	{{- end }}
 	{{$name | ToName}} := &{{$name | ToName}}ClientDelegate{
 {{- range $service, $apis := $services }}
-		{{- if IsV2Service $service }}
-		{{$service}}Client: {{$service}}v2.NewFromConfig({{$name | ToName}}Cfg, func(o *{{$service}}v2.Options) {
-			o.Retryer = awsConfigv2()
+		{{$service}}Client: {{$service}}.NewFromConfig({{$name | ToName}}Cfg, func(o *{{$service}}.Options) {
+			o.Retryer = awsConfig()
 		}),
-		{{- else }}
-		{{$service}}Client: {{$service}}.New({{$name | ToName}}Session, awsConfig),
-		{{- end }}
 {{- end}}
 	}
 	{{- end }}
 {{- end}}
 	return &DelegatingClient{
 {{- range $service := .Services }}
-		{{- if IsV2Service $service }}
 		{{$service | ToIfaceName}}Client: &{{$service}}Client{
-		{{- else }}
-		{{$service | ToIfaceName}}API: &{{$service}}Client{
 			{{$service | ToIfaceName}}API: nil,
-		{{- end }}
 {{- with $delegates := $service | index $.DelegatesByService }}
 {{- range $name, $apis := $delegates }}
 			{{$name | ToName}}: {{$name | ToName}},
@@ -189,11 +129,7 @@ func NewDelegatingClient (
 {{- with $services := $name | index $.DelegatesByName }}
 type {{$name | ToName}}ClientDelegate struct {
 {{- range $service, $apis := $services }}
-	{{- if IsV2Service $service }}
 	{{$service}}Client awsapi.{{$service | ToIfaceName}}API
-	{{- else }}
-	{{$service}}Client {{$service}}iface.{{$service | ToIfaceName}}API
-	{{- end }}
 {{- end}}
 }
 {{- end}}
@@ -202,11 +138,7 @@ type {{$name | ToName}}ClientDelegate struct {
 // DelegatingClient embeds clients for AWS services we have privileges to use with guest cluster component roles.
 type DelegatingClient struct {
 {{- range $service := .Services }}
-	{{- if IsV2Service $service }}
 	{{$service | ToIfaceName}}Client awsapi.{{$service | ToIfaceName}}API
-	{{- else }}
-	{{$service}}iface.{{$service | ToIfaceName}}API
-	{{- end }}
 {{- end}}
 }
 
@@ -214,10 +146,8 @@ type DelegatingClient struct {
 {{- with $delegates := $service | index $.DelegatesByService }}
 // {{$service}}Client delegates to individual component clients for API calls we know those components will have privileges to make.
 type {{$service}}Client struct {
-	{{- if not (IsV2Service $service) }}
 	// embedding this fulfills the interface and falls back to a panic for APIs we don't have privileges for
-	{{$service}}iface.{{$service | ToIfaceName}}API
-	{{- end }}
+	awsapi.{{$service | ToIfaceName}}API
 {{ range $name, $apis := $delegates }}
 	{{$name | ToName}} *{{$name | ToName}}ClientDelegate
 {{- end}}
@@ -226,15 +156,9 @@ type {{$service}}Client struct {
 {{- range $name := $.Delegates }}
 {{- with $apis := $name | index $delegates }}
 {{ range $api := $apis }}
-{{- if IsV2Service $service }}
-func (c *{{$service}}Client) {{$api}}(ctx context.Context, input *{{$service}}v2.{{$api}}Input, optFns ...func(*{{$service}}v2.Options)) (*{{$service}}v2.{{$api}}Output, error) {
+func (c *{{$service}}Client) {{$api}}(ctx context.Context, input *{{$service}}.{{$api}}Input, optFns ...func(*{{$service}}.Options)) (*{{$service}}.{{$api}}Output, error) {
 	return c.{{$name | ToName}}.{{$service}}Client.{{$api}}(ctx, input, optFns...)
 }
-{{- else }}
-func (c *{{$service}}Client) {{$api}}WithContext(ctx aws.Context, input *{{$service}}.{{$api}}Input, opts ...request.Option) (*{{Output $service $api}}, error) {
-	return c.{{$name | ToName}}.{{$service}}Client.{{$api}}WithContext(ctx, input, opts...)
-}
-{{- end }}
 {{- end}}
 {{- end}}
 {{- end}}
@@ -264,9 +188,9 @@ func (c *{{$service}}Client) {{$api}}WithContext(ctx aws.Context, input *{{$serv
 		panic(fmt.Errorf("unable to write delegate client template: %w", err))
 	}
 
-	// Generate interface definitions for v2 services
-	if err := generateV2Interfaces(delegatesByService); err != nil {
-		panic(fmt.Errorf("unable to generate v2 interfaces: %w", err))
+	// Generate interface definitions for all services
+	if err := generateInterfaces(delegatesByService); err != nil {
+		panic(fmt.Errorf("unable to generate interfaces: %w", err))
 	}
 }
 
@@ -325,26 +249,11 @@ func delegateNames(delegates aws.ServicesByDelegate) []string {
 	return delegateNameSlice
 }
 
-// v1Services lists services still using AWS SDK v1.
-// As services are migrated to v2, remove them from this list.
-// When this list is empty, all services have been migrated and this logic can be removed.
-var v1Services = []string{
-	"ec2",
-	"elb",
-	"elbv2",
-	"route53",
-	"sqs",
-}
-
-// isV2Service returns true if the service uses AWS SDK v2.
-// Services not in the v1Services list are assumed to use v2 (default for new services).
-func isV2Service(service string) bool {
-	for _, v1 := range v1Services {
-		if service == v1 {
-			return false
-		}
-	}
-	return true
+// serviceIfaceNames maps full service names to short interface name prefixes.
+// Used by ToIfaceName to produce readable type names (e.g. ELBAPI, ELBV2API).
+var serviceIfaceNames = map[string]string{
+	"elasticloadbalancing":   "ELB",
+	"elasticloadbalancingv2": "ELBV2",
 }
 
 // adjustServices maps permission attestation names to the Go SDK names, as necessary, and
@@ -352,7 +261,7 @@ func isV2Service(service string) bool {
 func adjustServices(delegates aws.ServicesByDelegate) aws.ServicesByDelegate {
 	// some services are named differently in the Go SDK
 	serviceOverrides := map[string][]string{
-		"elasticloadbalancing": {"elb", "elbv2"},
+		"elasticloadbalancing": {"elasticloadbalancing", "elasticloadbalancingv2"},
 	}
 	// some services we just don't care about
 	serviceIgnores := sets.New[string]("kms", "autoscaling", "iam", "tag")
@@ -385,7 +294,7 @@ func adjustAPIs(delegates aws.ServicesByDelegate) aws.ServicesByDelegate {
 	// some APIs exist for the ELBv1 or v2 group, but not both, and the privilege attestations do not
 	// distinguish between them
 	apiRemovals := map[string]sets.Set[string]{
-		"elb": sets.New(
+		"elasticloadbalancing": sets.New(
 			"RegisterTargets",
 			"CreateListener",
 			"CreateTargetGroup",
@@ -400,7 +309,7 @@ func adjustAPIs(delegates aws.ServicesByDelegate) aws.ServicesByDelegate {
 			"ModifyTargetGroup",
 			"ModifyTargetGroupAttributes",
 		),
-		"elbv2": sets.New(
+		"elasticloadbalancingv2": sets.New(
 			"ApplySecurityGroupsToLoadBalancer",
 			"AttachLoadBalancerToSubnets",
 			"ConfigureHealthCheck",
@@ -474,13 +383,75 @@ func deduplicateAPIs(delegatesByService DelegatesByService, delegateNames []stri
 	return updated
 }
 
-// generateV2Interfaces generates interface definitions for AWS SDK v2 services
-func generateV2Interfaces(delegatesByService DelegatesByService) error {
-	for service := range delegatesByService {
-		if !isV2Service(service) {
-			continue
-		}
+// extendedAPIs defines additional SDK methods used by CLI tools with full credentials.
+// These methods are NOT in the IAM delegation policy and will NOT be delegated.
+// They are merged into the base API interface so callers use a single interface type.
+// The delegating client embeds a nil interface for these methods (panic on call).
+var extendedAPIs = map[string][]string{
+	"sqs": {
+		"CreateQueue",
+		"DeleteQueue",
+		"SendMessage",
+	},
+	"route53": {
+		"AssociateVPCWithHostedZone",
+		"CreateHostedZone",
+		"CreateVPCAssociationAuthorization",
+		"DeleteHostedZone",
+		"DisassociateVPCFromHostedZone",
+		"GetHostedZone",
+		"ListHostedZonesByVPC",
+	},
+	"ec2": {
+		"AllocateAddress",
+		"AssociateDhcpOptions",
+		"CreateDhcpOptions",
+		"CreateVpc",
+		"CreateVpcEndpointServiceConfiguration",
+		"DeleteDhcpOptions",
+		"DeleteVpc",
+		"DeleteVpcEndpointServiceConfigurations",
+		"DescribeVpcEndpointConnections",
+		"DescribeVpcEndpointServiceConfigurations",
+		"DescribeVpcEndpointServicePermissions",
+		"GetConsoleOutput",
+		"ModifyVpcAttribute",
+		"ModifyVpcEndpointServicePermissions",
+		"ReleaseAddress",
+		"RejectVpcEndpointConnections",
+		"ReplaceRouteTableAssociation",
+	},
+}
 
+// standaloneAPIs defines service interfaces that are NOT part of the delegating client
+// (i.e. the service is in serviceIgnores) but still need a generated interface file in
+// support/awsapi/ for use by CLI tools and tests.
+var standaloneAPIs = map[string][]string{
+	"iam": {
+		"AddRoleToInstanceProfile",
+		"AttachRolePolicy",
+		"CreateInstanceProfile",
+		"CreateOpenIDConnectProvider",
+		"CreateRole",
+		"DeleteInstanceProfile",
+		"DeleteOpenIDConnectProvider",
+		"DeleteRole",
+		"DeleteRolePolicy",
+		"DetachRolePolicy",
+		"GetInstanceProfile",
+		"GetRole",
+		"GetRolePolicy",
+		"ListAttachedRolePolicies",
+		"ListOpenIDConnectProviders",
+		"ListRolePolicies",
+		"PutRolePolicy",
+		"RemoveRoleFromInstanceProfile",
+	},
+}
+
+// generateInterfaces generates interface definitions for all AWS SDK v2 services
+func generateInterfaces(delegatesByService DelegatesByService) error {
+	for service := range delegatesByService {
 		// Collect all APIs for this service
 		allAPIs := sets.New[string]()
 		for _, apis := range delegatesByService[service] {
@@ -490,15 +461,31 @@ func generateV2Interfaces(delegatesByService DelegatesByService) error {
 		slices.Sort(sortedAPIs)
 
 		// Generate interface file
-		if err := generateInterfaceFile(service, sortedAPIs); err != nil {
+		if err := generateInterfaceFile(service, sortedAPIs, extendedAPIs[service]); err != nil {
 			return fmt.Errorf("failed to generate interface for %s: %w", service, err)
 		}
 	}
+
+	// Generate interface files for standalone services (not in delegating client)
+	for service, apis := range standaloneAPIs {
+		sortedAPIs := append([]string{}, apis...)
+		slices.Sort(sortedAPIs)
+		if err := generateInterfaceFile(service, nil, sortedAPIs); err != nil {
+			return fmt.Errorf("failed to generate standalone interface for %s: %w", service, err)
+		}
+	}
+
 	return nil
 }
 
-// generateInterfaceFile generates a single interface file for a v2 service
-func generateInterfaceFile(service string, apis []string) error {
+// generateInterfaceFile generates a single interface file for an AWS SDK v2 service.
+// Extended APIs (from extendedAPIs map) are merged into the base interface,
+// matching v1's pattern where route53iface.Route53API contained all methods.
+func generateInterfaceFile(service string, apis []string, extended []string) error {
+	// Merge extended APIs into the main list for a single interface
+	allAPIs := append(append([]string{}, apis...), extended...)
+	slices.Sort(allAPIs)
+
 	interfaceTemplate := `// Code generated by delegatingclientgenerator. DO NOT EDIT.
 
 package awsapi
@@ -508,8 +495,19 @@ package awsapi
 import (
 	"context"
 
-	{{.Service}}v2 "github.com/aws/aws-sdk-go-v2/service/{{.Service}}"
+	"github.com/aws/aws-sdk-go-v2/service/{{.Service}}"
 )
+
+{{- if .HasExtended }}
+
+// {{.Service | ToUpper}}API defines the {{.Service | ToUpper}} operations used by HyperShift.
+// Generated from: cmd/infra/aws/iam.go + delegatingclientgenerator extendedAPIs
+//
+// This interface includes methods from IAM delegation policies as well as additional
+// methods used by CLI tools with full credentials. Only the delegated subset is
+// implemented by the delegating client; non-delegated methods will panic if called
+// through the delegating path (matching v1 behavior).
+{{- else }}
 
 // {{.Service | ToUpper}}API defines the {{.Service | ToUpper}} operations allowed by IAM policies.
 // Generated from: cmd/infra/aws/iam.go
@@ -517,18 +515,24 @@ import (
 // This interface includes all methods corresponding to IAM permissions granted to HyperShift.
 // Some IAM permissions map to multiple SDK methods (e.g., s3:ListBucket covers both
 // ListBuckets and ListObjectsV2). See delegatingclientgenerator for mapping rules.
+{{- end }}
 type {{.Service | ToUpper}}API interface {
 {{- range .APIs }}
-	{{.}}(ctx context.Context, input *{{$.Service}}v2.{{.}}Input, optFns ...func(*{{$.Service}}v2.Options)) (*{{$.Service}}v2.{{.}}Output, error)
+	{{.}}(ctx context.Context, input *{{$.Service}}.{{.}}Input, optFns ...func(*{{$.Service}}.Options)) (*{{$.Service}}.{{.}}Output, error)
 {{- end }}
 }
 
-// Ensure *{{.Service}}v2.Client implements {{.Service | ToUpper}}API
-var _ {{.Service | ToUpper}}API = (*{{.Service}}v2.Client)(nil)
+// Ensure *{{.Service}}.Client implements {{.Service | ToUpper}}API
+var _ {{.Service | ToUpper}}API = (*{{.Service}}.Client)(nil)
 `
 
 	tmpl, err := template.New("interface").Funcs(template.FuncMap{
-		"ToUpper": strings.ToUpper,
+		"ToUpper": func(s string) string {
+			if name, ok := serviceIfaceNames[s]; ok {
+				return name
+			}
+			return strings.ToUpper(s)
+		},
 	}).Parse(interfaceTemplate)
 	if err != nil {
 		return fmt.Errorf("unable to parse interface template: %w", err)
@@ -536,11 +540,13 @@ var _ {{.Service | ToUpper}}API = (*{{.Service}}v2.Client)(nil)
 
 	out := bytes.Buffer{}
 	if err := tmpl.Execute(&out, struct {
-		Service string
-		APIs    []string
+		Service     string
+		APIs        []string
+		HasExtended bool
 	}{
-		Service: service,
-		APIs:    apis,
+		Service:     service,
+		APIs:        allAPIs,
+		HasExtended: len(extended) > 0,
 	}); err != nil {
 		return fmt.Errorf("unable to execute interface template: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/control-plane-operator/hostedclusterconfigoperator/controllers/resources/manifests"
 	"github.com/openshift/hypershift/support/globalconfig"
 	"github.com/openshift/hypershift/support/releaseinfo"
@@ -54,8 +55,9 @@ const (
 	nodePoolAnnotationUpgradeInProgressFalse = "hypershift.openshift.io/nodePoolUpgradeInProgressFalse"
 	nodePoolAnnotationMaxUnavailable         = "hypershift.openshift.io/nodePoolMaxUnavailable"
 
-	TokenSecretPayloadKey = "payload"
-	TokenSecretReleaseKey = "release"
+	TokenSecretPayloadKey        = "payload"
+	TokenSecretReleaseKey        = "release"
+	TokenSecretReleaseVersionKey = "release-version"
 )
 
 type Reconciler struct {
@@ -69,7 +71,6 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("Reconciling")
 
 	// Fetch the MachineSet.
 	machineSet := &capiv1.MachineSet{}
@@ -140,7 +141,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 	log.Info("discovered mco image", "image", mcoImage)
 
-	return ctrl.Result{}, r.reconcileInPlaceUpgrade(ctx, nodePoolUpgradeAPI, tokenSecret, mcoImage)
+	releaseVersion := string(tokenSecret.Data[TokenSecretReleaseVersionKey])
+	if releaseVersion == "" {
+		return ctrl.Result{}, fmt.Errorf("token secret %s/%s is missing %q key", tokenSecret.Namespace, tokenSecret.Name, TokenSecretReleaseVersionKey)
+	}
+
+	return ctrl.Result{}, r.reconcileInPlaceUpgrade(ctx, nodePoolUpgradeAPI, tokenSecret, mcoImage, releaseVersion)
 }
 
 type nodePoolUpgradeAPI struct {
@@ -155,7 +161,7 @@ type nodePoolUpgradeAPI struct {
 }
 
 // reconcileInPlaceUpgrade loops over all Nodes that belong to a NodePool and performs an in place upgrade if necessary.
-func (r *Reconciler) reconcileInPlaceUpgrade(ctx context.Context, nodePoolUpgradeAPI *nodePoolUpgradeAPI, tokenSecret *corev1.Secret, mcoImage string) error {
+func (r *Reconciler) reconcileInPlaceUpgrade(ctx context.Context, nodePoolUpgradeAPI *nodePoolUpgradeAPI, tokenSecret *corev1.Secret, mcoImage, releaseVersion string) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	currentConfigVersionHash := nodePoolUpgradeAPI.status.currentConfigVersion
@@ -165,7 +171,7 @@ func (r *Reconciler) reconcileInPlaceUpgrade(ctx context.Context, nodePoolUpgrad
 	}
 	machineSet := nodePoolUpgradeAPI.spec.poolRef
 
-	nodes, err := getNodesForMachineSet(ctx, r.client, r.guestClusterClient, machineSet)
+	nodes, nodeToMachine, err := getNodesForMachineSet(ctx, r.client, r.guestClusterClient, machineSet)
 	if err != nil {
 		return err
 	}
@@ -213,11 +219,26 @@ func (r *Reconciler) reconcileInPlaceUpgrade(ctx context.Context, nodePoolUpgrad
 				log.Info("Reconciled MachineSet", "result", result)
 			}
 
-			return fmt.Errorf("degraded node found, cannot progress in-place upgrade. Degraded reason: %v", node.Annotations[MachineConfigDaemonMessageAnnotationKey])
+			return fmt.Errorf("degraded node %s found, cannot progress in-place upgrade. Degraded reason: %s", node.Name, node.Annotations[MachineConfigDaemonMessageAnnotationKey])
 		}
 
 		if nodeNeedsUpgrade(node, currentConfigVersionHash, targetConfigVersionHash) {
 			nodeNeedUpgradeCount++
+		} else if machine, ok := nodeToMachine[node.Name]; ok {
+			// Node has completed upgrade — annotate its Machine with the release version.
+			if machine.Annotations[hyperv1.NodePoolReleaseVersionAnnotation] != releaseVersion {
+				result, err := r.CreateOrUpdate(ctx, r.client, machine, func() error {
+					if machine.Annotations == nil {
+						machine.Annotations = make(map[string]string)
+					}
+					machine.Annotations[hyperv1.NodePoolReleaseVersionAnnotation] = releaseVersion
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("failed to annotate Machine %s with release version: %w", machine.Name, err)
+				}
+				log.Info("Annotated Machine with release version", "machine", machine.Name, "version", releaseVersion, "result", result)
+			}
 		}
 	}
 
@@ -260,7 +281,7 @@ func (r *Reconciler) reconcileInPlaceUpgrade(ctx context.Context, nodePoolUpgrad
 	return nil
 }
 
-func (r *Reconciler) setNodesDesiredConfig(ctx context.Context, hostedClusterClient client.Client, poolName string, nodes []*corev1.Node, targetConfigVersionHash string) error {
+func (r *Reconciler) setNodesDesiredConfig(ctx context.Context, hostedClusterClient client.Client, _ string, nodes []*corev1.Node, targetConfigVersionHash string) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	for _, node := range nodes {
@@ -333,7 +354,7 @@ func (r *Reconciler) reconcileUpgradePods(ctx context.Context, hostedClusterClie
 	return nil
 }
 
-// getPayloadImage gets the specified image reference from the payload
+// getPayloadImage gets the specified image reference from the payload.
 func (r *Reconciler) getPayloadImage(ctx context.Context, imageName string) (string, error) {
 	hcp := manifests.HostedControlPlane(r.hcpNamespace, r.hcpName)
 	if err := r.client.Get(ctx, client.ObjectKeyFromObject(hcp), hcp); err != nil {
@@ -492,7 +513,7 @@ func getNodesToUpgrade(nodes []*corev1.Node, targetConfig string, maxUnavailable
 	return append(availableCandidates, alreadyUnavailableNodes...)
 }
 
-func getCapacity(nodes []*corev1.Node, targetConfig string, maxUnavailable int) int {
+func getCapacity(nodes []*corev1.Node, _ string, maxUnavailable int) int {
 	// get how many machines we can update based on maxUnavailable
 	// In the MCO logic, unavailable is defined as any of:
 	// - config does not match
@@ -639,10 +660,10 @@ func (r *Reconciler) nodeToMachineSet(ctx context.Context, o client.Object) []re
 	}}}
 }
 
-func getNodesForMachineSet(ctx context.Context, c client.Reader, hostedClusterClient client.Client, machineSet *capiv1.MachineSet) ([]*corev1.Node, error) {
+func getNodesForMachineSet(ctx context.Context, c client.Reader, hostedClusterClient client.Client, machineSet *capiv1.MachineSet) ([]*corev1.Node, map[string]*capiv1.Machine, error) {
 	selectorMap, err := metav1.LabelSelectorAsMap(&machineSet.Spec.Selector)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert MachineSet %q label selector to a map: %w", machineSet.Name, err)
+		return nil, nil, fmt.Errorf("failed to convert MachineSet %q label selector to a map: %w", machineSet.Name, err)
 	}
 
 	// Get all Machines linked to this MachineSet.
@@ -652,7 +673,7 @@ func getNodesForMachineSet(ctx context.Context, c client.Reader, hostedClusterCl
 		client.InNamespace(machineSet.Namespace),
 		client.MatchingLabels(selectorMap),
 	); err != nil {
-		return nil, fmt.Errorf("failed to list machines: %w", err)
+		return nil, nil, fmt.Errorf("failed to list machines: %w", err)
 	}
 
 	var machineSetOwnedMachines []capiv1.Machine
@@ -663,17 +684,19 @@ func getNodesForMachineSet(ctx context.Context, c client.Reader, hostedClusterCl
 	}
 
 	var nodes []*corev1.Node
-	for _, machine := range machineSetOwnedMachines {
+	nodeToMachine := make(map[string]*capiv1.Machine)
+	for i, machine := range machineSetOwnedMachines {
 		if machine.Status.NodeRef != nil {
 			node := &corev1.Node{}
 			if err := hostedClusterClient.Get(ctx, client.ObjectKey{Name: machine.Status.NodeRef.Name}, node); err != nil {
-				return nil, fmt.Errorf("error getting node: %w", err)
+				return nil, nil, fmt.Errorf("error getting node: %w", err)
 			}
 			nodes = append(nodes, node)
+			nodeToMachine[node.Name] = &machineSetOwnedMachines[i]
 		}
 	}
 
-	return nodes, nil
+	return nodes, nodeToMachine, nil
 }
 
 func nodeNeedsUpgrade(node *corev1.Node, currentConfigVersion, targetConfigVersion string) bool {

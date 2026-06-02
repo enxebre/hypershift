@@ -6,7 +6,8 @@ import (
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/manifests"
 	karpenteroperatorv2 "github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/v2/karpenteroperator"
 	component "github.com/openshift/hypershift/support/controlplane-component"
-	"github.com/openshift/hypershift/support/util"
+	karpenterutil "github.com/openshift/hypershift/support/karpenter"
+	"github.com/openshift/hypershift/support/podspec"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -44,12 +45,16 @@ func NewComponent() component.ControlPlaneComponent {
 		).
 		WithPredicate(predicate).
 		WithDependencies(karpenteroperatorv2.ComponentName).
-		InjectAvailabilityProberContainer(util.AvailabilityProberOpts{}).
+		InjectAvailabilityProberContainer(podspec.AvailabilityProberOpts{}).
 		Build()
 }
 
 func predicate(cpContext component.WorkloadContext) (bool, error) {
 	hcp := cpContext.HCP
+
+	if !karpenterutil.IsKarpenterEnabled(hcp.Spec.AutoNode) {
+		return false, nil
+	}
 
 	// The deployment depends on the kubeconfig being reported.
 	if hcp.Status.KubeConfig == nil {

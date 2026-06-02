@@ -12,20 +12,16 @@ import (
 	"github.com/openshift/hypershift/cmd/util"
 	"github.com/openshift/hypershift/support/awsapi"
 
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
+	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	"github.com/aws/aws-sdk-go-v2/service/ram"
+	ramtypes "github.com/aws/aws-sdk-go-v2/service/ram/types"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"github.com/aws/aws-sdk-go/service/elb"
-	"github.com/aws/aws-sdk-go/service/elb/elbiface"
-	"github.com/aws/aws-sdk-go/service/elbv2"
-	"github.com/aws/aws-sdk-go/service/elbv2/elbv2iface"
-	"github.com/aws/aws-sdk-go/service/ram"
-	"github.com/aws/aws-sdk-go/service/ram/ramiface"
-	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/aws/aws-sdk-go/service/route53/route53iface"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -197,41 +193,50 @@ func (o *DestroyInfraOptions) Run(ctx context.Context) error {
 }
 
 func (o *DestroyInfraOptions) DestroyInfra(ctx context.Context) error {
-	var ec2Client, vpcOwnerEC2Client ec2iface.EC2API
-	var elbClient elbiface.ELBAPI
-	var elbv2Client elbv2iface.ELBV2API
-	var clusterRoute53Client, vpcOwnerRoute53Client, listRoute53Client, recordsRoute53Client route53iface.Route53API
+	var ec2Client, vpcOwnerEC2Client awsapi.EC2API
+	var elbClient awsapi.ELBAPI
+	var elbv2Client awsapi.ELBV2API
+	var clusterRoute53Client, vpcOwnerRoute53Client, listRoute53Client, recordsRoute53Client awsapi.ROUTE53API
 	var s3Client awsapi.S3API
-	var ramClient ramiface.RAMAPI
+	var ramClient *ram.Client
 	if o.AWSCredentialsOpts.AWSCredentialsOpts.AWSCredentialsFile != "" || o.AWSCredentialsOpts.AWSCredentialsOpts.STSCredentialsFile != "" {
-		awsSession, err := o.AWSCredentialsOpts.AWSCredentialsOpts.GetSession("cli-destroy-infra", o.CredentialsSecretData, o.Region)
+		awsSession, err := o.AWSCredentialsOpts.AWSCredentialsOpts.GetSession(ctx, "cli-destroy-infra", o.CredentialsSecretData, o.Region)
 		if err != nil {
 			return err
 		}
 		awsConfig := awsutil.NewConfig()
-		awsSessionv2, err := o.AWSCredentialsOpts.AWSCredentialsOpts.GetSessionV2(ctx, "cli-destroy-infra-s3", o.CredentialsSecretData, o.Region)
-		if err != nil {
-			return err
-		}
-		awsConfigv2 := awsutil.NewConfigV2()
-		ec2Client = ec2.New(awsSession, awsConfig)
+		ec2Client = ec2.NewFromConfig(*awsSession, func(o *ec2.Options) {
+			o.Retryer = awsConfig()
+		})
 		vpcOwnerEC2Client = ec2Client
-		elbClient = elb.New(awsSession, awsConfig)
-		elbv2Client = elbv2.New(awsSession, awsConfig)
-		clusterRoute53Client = route53.New(awsSession, awsutil.NewAWSRoute53Config())
-		s3Client = s3.NewFromConfig(*awsSessionv2, func(o *s3.Options) {
-			o.Retryer = awsConfigv2()
+		elbClient = elb.NewFromConfig(*awsSession, func(o *elb.Options) {
+			o.Retryer = awsConfig()
+		})
+		elbv2Client = elbv2.NewFromConfig(*awsSession, func(o *elbv2.Options) {
+			o.Retryer = awsConfig()
+		})
+		route53Config := awsutil.NewRoute53Config()
+		clusterRoute53Client = route53.NewFromConfig(*awsSession, func(o *route53.Options) {
+			o.Retryer = route53Config()
+		})
+		s3Client = s3.NewFromConfig(*awsSession, func(o *s3.Options) {
+			o.Retryer = awsConfig()
 		})
 
 		if o.VPCOwnerCredentialsOpts.AWSCredentialsFile != "" {
-			vpcOwnerAWSSession, err := o.VPCOwnerCredentialsOpts.GetSession("cli-destroy-infra", nil, o.Region)
+			vpcOwnerSession, err := o.VPCOwnerCredentialsOpts.GetSession(ctx, "cli-destroy-infra", nil, o.Region)
 			if err != nil {
 				return err
 			}
-			vpcOwnerEC2Client = ec2.New(vpcOwnerAWSSession, awsConfig)
-			vpcOwnerRoute53Client = route53.New(vpcOwnerAWSSession, awsutil.NewAWSRoute53Config())
-
-			ramClient = ram.New(vpcOwnerAWSSession, awsConfig)
+			vpcOwnerEC2Client = ec2.NewFromConfig(*vpcOwnerSession, func(o *ec2.Options) {
+				o.Retryer = awsConfig()
+			})
+			vpcOwnerRoute53Client = route53.NewFromConfig(*vpcOwnerSession, func(o *route53.Options) {
+				o.Retryer = route53Config()
+			})
+			ramClient = ram.NewFromConfig(*vpcOwnerSession, func(o *ram.Options) {
+				o.Retryer = awsutil.NewConfig()()
+			})
 		}
 
 		listRoute53Client = clusterRoute53Client
@@ -259,11 +264,11 @@ func (o *DestroyInfraOptions) DestroyInfra(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create delegating client: %w", err)
 		}
-		ec2Client = delegatingClent.EC2API
-		elbClient = delegatingClent.ELBAPI
-		elbv2Client = delegatingClent.ELBV2API
-		listRoute53Client = delegatingClent.Route53API
-		recordsRoute53Client = delegatingClent.Route53API
+		ec2Client = delegatingClent.EC2Client
+		elbClient = delegatingClent.ELBClient
+		elbv2Client = delegatingClent.ELBV2Client
+		listRoute53Client = delegatingClent.ROUTE53Client
+		recordsRoute53Client = delegatingClent.ROUTE53Client
 		s3Client = delegatingClent.S3Client
 	}
 
@@ -291,9 +296,9 @@ func (o *DestroyInfraOptions) DestroyS3Buckets(ctx context.Context, client awsap
 		return errs
 	}
 	for _, bucket := range result.Buckets {
-		if strings.HasPrefix(awsv2.ToString(bucket.Name), fmt.Sprintf("%s-image-registry-", o.InfraID)) {
-			if err := emptyBucket(ctx, client, awsv2.ToString(bucket.Name)); err != nil {
-				errs = append(errs, fmt.Errorf("failed to empty bucket %s: %w", awsv2.ToString(bucket.Name), err))
+		if strings.HasPrefix(aws.ToString(bucket.Name), fmt.Sprintf("%s-image-registry-", o.InfraID)) {
+			if err := emptyBucket(ctx, client, aws.ToString(bucket.Name)); err != nil {
+				errs = append(errs, fmt.Errorf("failed to empty bucket %s: %w", aws.ToString(bucket.Name), err))
 				continue
 			}
 			_, err := client.DeleteBucket(ctx, &s3.DeleteBucketInput{
@@ -302,12 +307,12 @@ func (o *DestroyInfraOptions) DestroyS3Buckets(ctx context.Context, client awsap
 			if err != nil {
 				var nsbErr *s3types.NoSuchBucket
 				if errors.As(err, &nsbErr) {
-					o.Log.Info("S3 Bucket already deleted", "name", awsv2.ToString(bucket.Name))
+					o.Log.Info("S3 Bucket already deleted", "name", aws.ToString(bucket.Name))
 				} else {
 					errs = append(errs, err)
 				}
 			} else {
-				o.Log.Info("Deleted S3 Bucket", "name", awsv2.ToString(bucket.Name))
+				o.Log.Info("Deleted S3 Bucket", "name", aws.ToString(bucket.Name))
 			}
 		}
 	}
@@ -320,7 +325,7 @@ func (o *DestroyInfraOptions) DestroyS3Buckets(ctx context.Context, client awsap
 // We manually implement batch deletion using ListObjectsV2Paginator + DeleteObjects API.
 func emptyBucket(ctx context.Context, client awsapi.S3API, name string) error {
 	paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
-		Bucket: awsv2.String(name),
+		Bucket: aws.String(name),
 	})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -339,7 +344,7 @@ func emptyBucket(ctx context.Context, client awsapi.S3API, name string) error {
 			objects = append(objects, s3types.ObjectIdentifier{Key: obj.Key})
 		}
 		output, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-			Bucket: awsv2.String(name),
+			Bucket: aws.String(name),
 			Delete: &s3types.Delete{Objects: objects},
 		})
 		if err != nil {
@@ -356,8 +361,8 @@ func emptyBucket(ctx context.Context, client awsapi.S3API, name string) error {
 			errMsgs := make([]string, 0, len(output.Errors))
 			for _, delErr := range output.Errors {
 				errMsgs = append(errMsgs, fmt.Sprintf("%s: %s",
-					awsv2.ToString(delErr.Key),
-					awsv2.ToString(delErr.Message)))
+					aws.ToString(delErr.Key),
+					aws.ToString(delErr.Message)))
 			}
 			return fmt.Errorf("failed to delete %d objects from bucket %s: %s",
 				len(output.Errors), name, strings.Join(errMsgs, "; "))
@@ -366,173 +371,170 @@ func emptyBucket(ctx context.Context, client awsapi.S3API, name string) error {
 	return nil
 }
 
-func (o *DestroyInfraOptions) DestroyV1ELBs(ctx context.Context, client elbiface.ELBAPI, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroyV1ELBs(ctx context.Context, client awsapi.ELBAPI, vpcID string) []error {
 	var errs []error
-	deleteLBs := func(out *elb.DescribeLoadBalancersOutput, _ bool) bool {
+	paginator := elb.NewDescribeLoadBalancersPaginator(client, &elb.DescribeLoadBalancersInput{})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, lb := range out.LoadBalancerDescriptions {
-			if *lb.VPCId != *vpcID {
+			if aws.ToString(lb.VPCId) != vpcID {
 				continue
 			}
-			_, err := client.DeleteLoadBalancerWithContext(ctx, &elb.DeleteLoadBalancerInput{
+			if _, err := client.DeleteLoadBalancer(ctx, &elb.DeleteLoadBalancerInput{
 				LoadBalancerName: lb.LoadBalancerName,
-			})
-			if err != nil {
+			}); err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted ELB", "name", lb.LoadBalancerName)
+				o.Log.Info("Deleted ELB", "name", aws.ToString(lb.LoadBalancerName))
 			}
 		}
-		return true
-	}
-	err := client.DescribeLoadBalancersPagesWithContext(ctx,
-		&elb.DescribeLoadBalancersInput{},
-		deleteLBs)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyV2ELBs(ctx context.Context, client elbv2iface.ELBV2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroyV2ELBs(ctx context.Context, client awsapi.ELBV2API, vpcID string) []error {
 	var errs []error
-	deleteLBs := func(out *elbv2.DescribeLoadBalancersOutput, _ bool) bool {
+	lbPaginator := elbv2.NewDescribeLoadBalancersPaginator(client, &elbv2.DescribeLoadBalancersInput{})
+	for lbPaginator.HasMorePages() {
+		out, err := lbPaginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, lb := range out.LoadBalancers {
-			if *lb.VpcId != *vpcID {
+			if aws.ToString(lb.VpcId) != vpcID {
 				continue
 			}
-			_, err := client.DeleteLoadBalancerWithContext(ctx, &elbv2.DeleteLoadBalancerInput{
+			if _, err := client.DeleteLoadBalancer(ctx, &elbv2.DeleteLoadBalancerInput{
 				LoadBalancerArn: lb.LoadBalancerArn,
-			})
-			if err != nil {
+			}); err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted ELB", "name", lb.LoadBalancerName)
+				o.Log.Info("Deleted ELBV2 load balancer", "name", aws.ToString(lb.LoadBalancerName))
 			}
 		}
-		return true
 	}
-	err := client.DescribeLoadBalancersPagesWithContext(ctx,
-		&elbv2.DescribeLoadBalancersInput{},
-		deleteLBs)
-	if err != nil {
-		errs = append(errs, err)
-	}
-	deleteTargetGroups := func(out *elbv2.DescribeTargetGroupsOutput, _ bool) bool {
+	tgPaginator := elbv2.NewDescribeTargetGroupsPaginator(client, &elbv2.DescribeTargetGroupsInput{})
+	for tgPaginator.HasMorePages() {
+		out, err := tgPaginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, tg := range out.TargetGroups {
-			if aws.StringValue(tg.VpcId) != aws.StringValue(vpcID) {
+			if aws.ToString(tg.VpcId) != vpcID {
 				continue
 			}
-			_, err := client.DeleteTargetGroupWithContext(ctx, &elbv2.DeleteTargetGroupInput{
+			if _, err := client.DeleteTargetGroup(ctx, &elbv2.DeleteTargetGroupInput{
 				TargetGroupArn: tg.TargetGroupArn,
-			})
-			if err != nil {
+			}); err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted TargetGroup", "name", aws.StringValue(tg.TargetGroupName))
+				o.Log.Info("Deleted TargetGroup", "name", aws.ToString(tg.TargetGroupName))
 			}
 		}
-		return true
 	}
-	err = client.DescribeTargetGroupsPagesWithContext(ctx,
-		&elbv2.DescribeTargetGroupsInput{},
-		deleteTargetGroups,
-	)
-	if err != nil {
-		errs = append(errs, err)
-	}
-
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyVPCEndpoints(ctx context.Context, client ec2iface.EC2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroyVPCEndpoints(ctx context.Context, client awsapi.EC2API, vpcID string) []error {
 	var errs []error
-	deleteVPCEndpoints := func(out *ec2.DescribeVpcEndpointsOutput, _ bool) bool {
-		ids := make([]*string, 0, len(out.VpcEndpoints))
+	paginator := ec2.NewDescribeVpcEndpointsPaginator(client, &ec2.DescribeVpcEndpointsInput{Filters: vpcFilter(vpcID)})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
+		ids := make([]string, 0, len(out.VpcEndpoints))
 		for _, ep := range out.VpcEndpoints {
-			ids = append(ids, ep.VpcEndpointId)
+			ids = append(ids, aws.ToString(ep.VpcEndpointId))
 		}
 		if len(ids) > 0 {
-			_, err := client.DeleteVpcEndpointsWithContext(ctx, &ec2.DeleteVpcEndpointsInput{
+			_, err := client.DeleteVpcEndpoints(ctx, &ec2.DeleteVpcEndpointsInput{
 				VpcEndpointIds: ids,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				epIDs := make([]string, 0, len(ids))
-				for _, id := range ids {
-					epIDs = append(epIDs, aws.StringValue(id))
-				}
-				o.Log.Info("Deleted VPC endpoints", "IDs", strings.Join(epIDs, " "))
+				o.Log.Info("Deleted VPC endpoints", "IDs", strings.Join(ids, " "))
 			}
 		}
-		return true
-	}
-	err := client.DescribeVpcEndpointsPagesWithContext(ctx,
-		&ec2.DescribeVpcEndpointsInput{Filters: vpcFilter(vpcID)},
-		deleteVPCEndpoints)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyVPCEndpointServices(ctx context.Context, client ec2iface.EC2API) []error {
+func (o *DestroyInfraOptions) DestroyVPCEndpointServices(ctx context.Context, client awsapi.EC2API) []error {
 	var errs []error
-	deleteVPCEndpointServices := func(desc *ec2.DescribeVpcEndpointServiceConfigurationsOutput, _ bool) bool {
+	paginator := ec2.NewDescribeVpcEndpointServiceConfigurationsPaginator(client, &ec2.DescribeVpcEndpointServiceConfigurationsInput{Filters: o.ec2Filters()})
+outer:
+	for paginator.HasMorePages() {
+		desc, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		var ids []string
 		for _, cfg := range desc.ServiceConfigurations {
-			ids = append(ids, *cfg.ServiceId)
+			ids = append(ids, aws.ToString(cfg.ServiceId))
 		}
 		if len(ids) < 1 {
-			return true
+			continue
 		}
 
-		endpointConnections, err := client.DescribeVpcEndpointConnections(&ec2.DescribeVpcEndpointConnectionsInput{Filters: []*ec2.Filter{{Name: aws.String("service-id"), Values: aws.StringSlice(ids)}}})
+		endpointConnections, err := client.DescribeVpcEndpointConnections(ctx, &ec2.DescribeVpcEndpointConnectionsInput{
+			Filters: []ec2types.Filter{{Name: aws.String("service-id"), Values: ids}},
+		})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to list endpoint connections: %w", err))
-			return false
+			break
 		}
-		endpointConnectionsByServiceID := map[*string][]*string{}
+		endpointConnectionsByServiceID := map[string][]string{}
 		for _, endpointConnection := range endpointConnections.VpcEndpointConnections {
-			endpointConnectionsByServiceID[endpointConnection.ServiceId] = append(endpointConnectionsByServiceID[endpointConnection.ServiceId], endpointConnection.VpcEndpointId)
+			svcID := aws.ToString(endpointConnection.ServiceId)
+			epID := aws.ToString(endpointConnection.VpcEndpointId)
+			endpointConnectionsByServiceID[svcID] = append(endpointConnectionsByServiceID[svcID], epID)
 		}
 		for service, endpoints := range endpointConnectionsByServiceID {
-			if _, err := client.RejectVpcEndpointConnectionsWithContext(ctx, &ec2.RejectVpcEndpointConnectionsInput{ServiceId: service, VpcEndpointIds: endpoints}); err != nil {
-				errs = append(errs, fmt.Errorf("failed to reject endpoint connections for service %s endpoints %v", aws.StringValue(service), aws.StringValueSlice(endpoints)))
-				return false
+			if _, err := client.RejectVpcEndpointConnections(ctx, &ec2.RejectVpcEndpointConnectionsInput{
+				ServiceId: aws.String(service), VpcEndpointIds: endpoints,
+			}); err != nil {
+				errs = append(errs, fmt.Errorf("failed to reject endpoint connections for service %s endpoints %v", service, endpoints))
+				break outer
 			}
-			o.Log.Info("Deleted endpoint connections", "serviceID", aws.StringValue(service), "endpoints", fmt.Sprintf("%v", aws.StringValueSlice(endpoints)))
+			o.Log.Info("Deleted endpoint connections", "serviceID", service, "endpoints", fmt.Sprintf("%v", endpoints))
 		}
 
-		if _, err := client.DeleteVpcEndpointServiceConfigurationsWithContext(ctx, &ec2.DeleteVpcEndpointServiceConfigurationsInput{
-			ServiceIds: aws.StringSlice(ids),
+		if _, err := client.DeleteVpcEndpointServiceConfigurations(ctx, &ec2.DeleteVpcEndpointServiceConfigurationsInput{
+			ServiceIds: ids,
 		}); err != nil {
 			errs = append(errs, fmt.Errorf("failed to delete vpc endpoint services with ids %v: %w", ids, err))
 		} else {
 			o.Log.Info("Deleted VPC endpoint services", "IDs", ids)
 		}
-
-		return true
-	}
-
-	if err := client.DescribeVpcEndpointServiceConfigurationsPagesWithContext(ctx,
-		&ec2.DescribeVpcEndpointServiceConfigurationsInput{Filters: o.ec2Filters()},
-		deleteVPCEndpointServices,
-	); err != nil {
-		errs = append(errs, err)
 	}
 
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyRouteTables(ctx context.Context, client ec2iface.EC2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroyRouteTables(ctx context.Context, client awsapi.EC2API, vpcID string) []error {
 	var errs []error
-	deleteRouteTables := func(out *ec2.DescribeRouteTablesOutput, _ bool) bool {
+	paginator := ec2.NewDescribeRouteTablesPaginator(client, &ec2.DescribeRouteTablesInput{Filters: vpcFilter(vpcID)})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, routeTable := range out.RouteTables {
 			var routeErrs []error
 			for _, route := range routeTable.Routes {
-				if aws.StringValue(route.Origin) == "CreateRoute" {
-					_, err := client.DeleteRouteWithContext(ctx, &ec2.DeleteRouteInput{
+				if string(route.Origin) == "CreateRoute" {
+					_, err := client.DeleteRoute(ctx, &ec2.DeleteRouteInput{
 						RouteTableId:             routeTable.RouteTableId,
 						DestinationCidrBlock:     route.DestinationCidrBlock,
 						DestinationIpv6CidrBlock: route.DestinationIpv6CidrBlock,
@@ -541,7 +543,7 @@ func (o *DestroyInfraOptions) DestroyRouteTables(ctx context.Context, client ec2
 					if err != nil {
 						routeErrs = append(routeErrs, err)
 					} else {
-						o.Log.Info("Deleted route from route table", "table", aws.StringValue(routeTable.RouteTableId), "destination", aws.StringValue(route.DestinationCidrBlock))
+						o.Log.Info("Deleted route from route table", "table", aws.ToString(routeTable.RouteTableId), "destination", aws.ToString(route.DestinationCidrBlock))
 					}
 				}
 			}
@@ -552,17 +554,17 @@ func (o *DestroyInfraOptions) DestroyRouteTables(ctx context.Context, client ec2
 			hasMain := false
 			var assocErrs []error
 			for _, assoc := range routeTable.Associations {
-				if aws.BoolValue(assoc.Main) {
+				if aws.ToBool(assoc.Main) {
 					hasMain = true
 					continue
 				}
-				_, err := client.DisassociateRouteTableWithContext(ctx, &ec2.DisassociateRouteTableInput{
+				_, err := client.DisassociateRouteTable(ctx, &ec2.DisassociateRouteTableInput{
 					AssociationId: assoc.RouteTableAssociationId,
 				})
 				if err != nil {
 					assocErrs = append(assocErrs, err)
 				} else {
-					o.Log.Info("Removed route table association", "table", aws.StringValue(routeTable.RouteTableId), "association", aws.StringValue(assoc.RouteTableId))
+					o.Log.Info("Removed route table association", "table", aws.ToString(routeTable.RouteTableId), "association", aws.ToString(assoc.RouteTableId))
 				}
 			}
 			if len(assocErrs) > 0 {
@@ -572,270 +574,252 @@ func (o *DestroyInfraOptions) DestroyRouteTables(ctx context.Context, client ec2
 			if hasMain {
 				continue
 			}
-			_, err := client.DeleteRouteTableWithContext(ctx, &ec2.DeleteRouteTableInput{
+			_, err := client.DeleteRouteTable(ctx, &ec2.DeleteRouteTableInput{
 				RouteTableId: routeTable.RouteTableId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted route table", "table", aws.StringValue(routeTable.RouteTableId))
+				o.Log.Info("Deleted route table", "table", aws.ToString(routeTable.RouteTableId))
 			}
 		}
-		return false
-	}
-
-	err := client.DescribeRouteTablesPagesWithContext(ctx,
-		&ec2.DescribeRouteTablesInput{Filters: vpcFilter(vpcID)},
-		deleteRouteTables)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroySecurityGroups(ctx context.Context, client ec2iface.EC2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroySecurityGroups(ctx context.Context, client awsapi.EC2API, vpcID string) []error {
 	var errs []error
-	deleteSecurityGroups := func(out *ec2.DescribeSecurityGroupsOutput, _ bool) bool {
+	paginator := ec2.NewDescribeSecurityGroupsPaginator(client, &ec2.DescribeSecurityGroupsInput{Filters: vpcFilter(vpcID)})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, sg := range out.SecurityGroups {
 			var permissionErrs []error
 			if len(sg.IpPermissions) > 0 {
-				_, err := client.RevokeSecurityGroupIngressWithContext(ctx, &ec2.RevokeSecurityGroupIngressInput{
+				_, err := client.RevokeSecurityGroupIngress(ctx, &ec2.RevokeSecurityGroupIngressInput{
 					GroupId:       sg.GroupId,
 					IpPermissions: sg.IpPermissions,
 				})
 				if err != nil {
 					permissionErrs = append(permissionErrs, err)
 				} else {
-					o.Log.Info("Revoked security group ingress permissions", "group", aws.StringValue(sg.GroupId))
+					o.Log.Info("Revoked security group ingress permissions", "group", aws.ToString(sg.GroupId))
 				}
 			}
 
 			if len(sg.IpPermissionsEgress) > 0 {
-				_, err := client.RevokeSecurityGroupEgressWithContext(ctx, &ec2.RevokeSecurityGroupEgressInput{
+				_, err := client.RevokeSecurityGroupEgress(ctx, &ec2.RevokeSecurityGroupEgressInput{
 					GroupId:       sg.GroupId,
 					IpPermissions: sg.IpPermissionsEgress,
 				})
 				if err != nil {
 					permissionErrs = append(permissionErrs, err)
 				} else {
-					o.Log.Info("Revoked security group egress permissions", "group", aws.StringValue(sg.GroupId))
+					o.Log.Info("Revoked security group egress permissions", "group", aws.ToString(sg.GroupId))
 				}
 			}
 			if len(permissionErrs) > 0 {
 				errs = append(errs, permissionErrs...)
 				continue
 			}
-			if aws.StringValue(sg.GroupName) == "default" {
+			if aws.ToString(sg.GroupName) == "default" {
 				continue
 			}
-			_, err := client.DeleteSecurityGroupWithContext(ctx, &ec2.DeleteSecurityGroupInput{
+			_, err := client.DeleteSecurityGroup(ctx, &ec2.DeleteSecurityGroupInput{
 				GroupId: sg.GroupId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted security group", "group", aws.StringValue(sg.GroupId))
+				o.Log.Info("Deleted security group", "group", aws.ToString(sg.GroupId))
 			}
 		}
-
-		return true
-	}
-
-	err := client.DescribeSecurityGroupsPagesWithContext(ctx,
-		&ec2.DescribeSecurityGroupsInput{Filters: vpcFilter(vpcID)},
-		deleteSecurityGroups)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyNATGateways(ctx context.Context, client ec2iface.EC2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroyNATGateways(ctx context.Context, client awsapi.EC2API, vpcID string) []error {
 	var errs []error
-	deleteNATGateways := func(out *ec2.DescribeNatGatewaysOutput, _ bool) bool {
+	paginator := ec2.NewDescribeNatGatewaysPaginator(client, &ec2.DescribeNatGatewaysInput{Filter: vpcFilter(vpcID)})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, natGateway := range out.NatGateways {
-			if natGateway.State != nil && *natGateway.State == "deleted" {
+			if natGateway.State == ec2types.NatGatewayStateDeleted {
 				continue
 			}
-			if natGateway.State != nil && *natGateway.State == "deleting" {
-				errs = append(errs, fmt.Errorf("NAT gateway %s still deleting", aws.StringValue(natGateway.NatGatewayId)))
+			if natGateway.State == ec2types.NatGatewayStateDeleting {
+				errs = append(errs, fmt.Errorf("NAT gateway %s still deleting", aws.ToString(natGateway.NatGatewayId)))
 				continue
 			}
-			_, err := client.DeleteNatGatewayWithContext(ctx, &ec2.DeleteNatGatewayInput{
+			_, err := client.DeleteNatGateway(ctx, &ec2.DeleteNatGatewayInput{
 				NatGatewayId: natGateway.NatGatewayId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				errs = append(errs, fmt.Errorf("deleting NAT gateway %s", aws.StringValue(natGateway.NatGatewayId)))
+				errs = append(errs, fmt.Errorf("deleting NAT gateway %s", aws.ToString(natGateway.NatGatewayId)))
 			}
 		}
-		return true
-	}
-	err := client.DescribeNatGatewaysPagesWithContext(ctx,
-		&ec2.DescribeNatGatewaysInput{Filter: vpcFilter(vpcID)},
-		deleteNATGateways)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) destroyInstances(ctx context.Context, client ec2iface.EC2API) []error {
+func (o *DestroyInfraOptions) destroyInstances(ctx context.Context, client awsapi.EC2API) []error {
 	var errs []error
-	deleteInstances := func(out *ec2.DescribeInstancesOutput, _ bool) bool {
-		var instanceIDs []*string
+	paginator := ec2.NewDescribeInstancesPaginator(client, &ec2.DescribeInstancesInput{Filters: o.ec2Filters()})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to describe instances: %w", err))
+			break
+		}
+		var instanceIDs []string
 		for _, reservation := range out.Reservations {
 			for _, instance := range reservation.Instances {
-				instanceIDs = append(instanceIDs, aws.String(*instance.InstanceId))
+				instanceIDs = append(instanceIDs, aws.ToString(instance.InstanceId))
 			}
 		}
 		if len(instanceIDs) > 0 {
-			if _, err := client.TerminateInstances(&ec2.TerminateInstancesInput{InstanceIds: instanceIDs}); err != nil {
+			if _, err := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: instanceIDs}); err != nil {
 				errs = append(errs, fmt.Errorf("failed to terminate instances: %w", err))
 			}
 		}
-
-		return true
 	}
-
-	if err := client.DescribeInstancesPagesWithContext(ctx, &ec2.DescribeInstancesInput{Filters: o.ec2Filters()}, deleteInstances); err != nil {
-		errs = append(errs, fmt.Errorf("failed to describe instances: %w", err))
-	}
-
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyInternetGateways(ctx context.Context, client ec2iface.EC2API) []error {
+func (o *DestroyInfraOptions) DestroyInternetGateways(ctx context.Context, client awsapi.EC2API) []error {
 	var errs []error
-	deleteInternetGateways := func(out *ec2.DescribeInternetGatewaysOutput, _ bool) bool {
+	paginator := ec2.NewDescribeInternetGatewaysPaginator(client, &ec2.DescribeInternetGatewaysInput{Filters: o.ec2Filters()})
+	for paginator.HasMorePages() {
+		out, paginateErr := paginator.NextPage(ctx)
+		if paginateErr != nil {
+			errs = append(errs, paginateErr)
+			break
+		}
 		for _, igw := range out.InternetGateways {
 			var detachErrs []error
 			for _, attachment := range igw.Attachments {
-				_, err := client.DetachInternetGatewayWithContext(ctx, &ec2.DetachInternetGatewayInput{
+				_, err := client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
 					InternetGatewayId: igw.InternetGatewayId,
 					VpcId:             attachment.VpcId,
 				})
 				if err != nil {
 					detachErrs = append(detachErrs, err)
 				} else {
-					o.Log.Info("Detached internet gateway from VPC", "gateway id", aws.StringValue(igw.InternetGatewayId), "vpc", aws.StringValue(attachment.VpcId))
+					o.Log.Info("Detached internet gateway from VPC", "gateway id", aws.ToString(igw.InternetGatewayId), "vpc", aws.ToString(attachment.VpcId))
 				}
 			}
 			if len(detachErrs) > 0 {
 				errs = append(errs, detachErrs...)
 				continue
 			}
-			_, err := client.DeleteInternetGatewayWithContext(ctx, &ec2.DeleteInternetGatewayInput{
+			_, err := client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
 				InternetGatewayId: igw.InternetGatewayId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted internet gateway", "id", aws.StringValue(igw.InternetGatewayId))
+				o.Log.Info("Deleted internet gateway", "id", aws.ToString(igw.InternetGatewayId))
 			}
 		}
-		return true
 	}
-
-	err := client.DescribeInternetGatewaysPagesWithContext(ctx,
-		&ec2.DescribeInternetGatewaysInput{Filters: o.ec2Filters()},
-		deleteInternetGateways)
-	if err != nil {
-		errs = append(errs, err)
-	}
-	return nil
+	return errs
 }
 
-func (o *DestroyInfraOptions) DestroySubnets(ctx context.Context, client ec2iface.EC2API, vpcID *string) []error {
+func (o *DestroyInfraOptions) DestroySubnets(ctx context.Context, client awsapi.EC2API, vpcID string) []error {
 	var errs []error
-	deleteSubnets := func(out *ec2.DescribeSubnetsOutput, _ bool) bool {
+	paginator := ec2.NewDescribeSubnetsPaginator(client, &ec2.DescribeSubnetsInput{Filters: vpcFilter(vpcID)})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, subnet := range out.Subnets {
-			_, err := client.DeleteSubnetWithContext(ctx, &ec2.DeleteSubnetInput{
+			_, err := client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
 				SubnetId: subnet.SubnetId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted subnet", "id", aws.StringValue(subnet.SubnetId))
+				o.Log.Info("Deleted subnet", "id", aws.ToString(subnet.SubnetId))
 			}
 		}
-		return true
-	}
-	err := client.DescribeSubnetsPagesWithContext(ctx,
-		&ec2.DescribeSubnetsInput{Filters: vpcFilter(vpcID)},
-		deleteSubnets)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
 func (o *DestroyInfraOptions) DestroyVPCs(ctx context.Context,
-	ec2client ec2iface.EC2API,
-	vpcOwnerEC2Client ec2iface.EC2API,
-	elbclient elbiface.ELBAPI,
-	elbv2client elbv2iface.ELBV2API,
-	route53listClient route53iface.Route53API,
-	route53client route53iface.Route53API,
-	ramClient ramiface.RAMAPI) []error {
+	ec2client awsapi.EC2API,
+	vpcOwnerEC2Client awsapi.EC2API,
+	elbclient awsapi.ELBAPI,
+	elbv2client awsapi.ELBV2API,
+	route53listClient awsapi.ROUTE53API,
+	route53client awsapi.ROUTE53API,
+	ramClient *ram.Client) []error {
 	var errs []error
-	deleteVPC := func(out *ec2.DescribeVpcsOutput, _ bool) bool {
+	paginator := ec2.NewDescribeVpcsPaginator(vpcOwnerEC2Client, &ec2.DescribeVpcsInput{Filters: o.ec2Filters()})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, vpc := range out.Vpcs {
 			var childErrs []error
 
 			// First, destroy resources that exist in cluster account (in the case vpc is shared)
-			childErrs = append(childErrs, o.DestroyV1ELBs(ctx, elbclient, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroyV2ELBs(ctx, elbv2client, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroySecurityGroups(ctx, ec2client, vpc.VpcId)...)
+			childErrs = append(childErrs, o.DestroyV1ELBs(ctx, elbclient, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroyV2ELBs(ctx, elbv2client, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroySecurityGroups(ctx, ec2client, aws.ToString(vpc.VpcId))...)
 
 			if ramClient != nil {
 				// Delete the VPC share
 				childErrs = append(childErrs, o.DestroyVPCShare(ctx, ramClient)...)
 			}
 
-			childErrs = append(childErrs, o.DestroyVPCEndpoints(ctx, vpcOwnerEC2Client, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroyPrivateZones(ctx, route53listClient, route53client, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroyRouteTables(ctx, vpcOwnerEC2Client, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroyNATGateways(ctx, vpcOwnerEC2Client, vpc.VpcId)...)
+			childErrs = append(childErrs, o.DestroyVPCEndpoints(ctx, vpcOwnerEC2Client, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroyPrivateZones(ctx, route53listClient, route53client, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroyRouteTables(ctx, vpcOwnerEC2Client, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroyNATGateways(ctx, vpcOwnerEC2Client, aws.ToString(vpc.VpcId))...)
 			if len(childErrs) > 0 {
 				errs = append(errs, childErrs...)
 				continue
 			}
-			childErrs = append(childErrs, o.DestroySecurityGroups(ctx, vpcOwnerEC2Client, vpc.VpcId)...)
-			childErrs = append(childErrs, o.DestroySubnets(ctx, vpcOwnerEC2Client, vpc.VpcId)...)
+			childErrs = append(childErrs, o.DestroySecurityGroups(ctx, vpcOwnerEC2Client, aws.ToString(vpc.VpcId))...)
+			childErrs = append(childErrs, o.DestroySubnets(ctx, vpcOwnerEC2Client, aws.ToString(vpc.VpcId))...)
 			if len(childErrs) > 0 {
 				errs = append(errs, childErrs...)
 				continue
 			}
-			_, err := vpcOwnerEC2Client.DeleteVpcWithContext(ctx, &ec2.DeleteVpcInput{
+			_, err := vpcOwnerEC2Client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
 				VpcId: vpc.VpcId,
 			})
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete vpc with id %s: %w", *vpc.VpcId, err))
+				errs = append(errs, fmt.Errorf("failed to delete vpc with id %s: %w", aws.ToString(vpc.VpcId), err))
 			} else {
-				o.Log.Info("Deleted VPC", "id", aws.StringValue(vpc.VpcId))
+				o.Log.Info("Deleted VPC", "id", aws.ToString(vpc.VpcId))
 			}
 		}
-		return true
-	}
-	err := vpcOwnerEC2Client.DescribeVpcsPagesWithContext(ctx,
-		&ec2.DescribeVpcsInput{Filters: o.ec2Filters()},
-		deleteVPC)
-
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyVPCShare(ctx context.Context, client ramiface.RAMAPI) []error {
-	result, err := client.GetResourceSharesWithContext(ctx, &ram.GetResourceSharesInput{
-		ResourceOwner: aws.String("SELF"),
-		TagFilters: []*ram.TagFilter{
+func (o *DestroyInfraOptions) DestroyVPCShare(ctx context.Context, client *ram.Client) []error {
+	result, err := client.GetResourceShares(ctx, &ram.GetResourceSharesInput{
+		ResourceOwner: ramtypes.ResourceOwnerSelf,
+		TagFilters: []ramtypes.TagFilter{
 			{
 				TagKey:    aws.String(clusterTag(o.InfraID)),
-				TagValues: []*string{aws.String(clusterTagValue)},
+				TagValues: []string{clusterTagValue},
 			},
 		},
 	})
@@ -845,44 +829,43 @@ func (o *DestroyInfraOptions) DestroyVPCShare(ctx context.Context, client ramifa
 
 	var errs []error
 	for _, share := range result.ResourceShares {
-		if _, err := client.DeleteResourceShareWithContext(ctx, &ram.DeleteResourceShareInput{
+		if _, err := client.DeleteResourceShare(ctx, &ram.DeleteResourceShareInput{
 			ResourceShareArn: share.ResourceShareArn,
 		}); err != nil {
 			errs = append(errs, err)
 		}
-		o.Log.Info("Deleted VPC resource share", "arn", aws.StringValue(share.ResourceShareArn))
+		o.Log.Info("Deleted VPC resource share", "arn", aws.ToString(share.ResourceShareArn))
 	}
 
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyDHCPOptions(ctx context.Context, client ec2iface.EC2API) []error {
+func (o *DestroyInfraOptions) DestroyDHCPOptions(ctx context.Context, client awsapi.EC2API) []error {
 	var errs []error
-	deleteDHCPOptions := func(out *ec2.DescribeDhcpOptionsOutput, _ bool) bool {
+	paginator := ec2.NewDescribeDhcpOptionsPaginator(client, &ec2.DescribeDhcpOptionsInput{Filters: o.ec2Filters()})
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
 		for _, dhcpOpt := range out.DhcpOptions {
-			_, err := client.DeleteDhcpOptionsWithContext(ctx, &ec2.DeleteDhcpOptionsInput{
+			_, err := client.DeleteDhcpOptions(ctx, &ec2.DeleteDhcpOptionsInput{
 				DhcpOptionsId: dhcpOpt.DhcpOptionsId,
 			})
 			if err != nil {
 				errs = append(errs, err)
 			} else {
-				o.Log.Info("Deleted DHCP options", "id", aws.StringValue(dhcpOpt.DhcpOptionsId))
+				o.Log.Info("Deleted DHCP options", "id", aws.ToString(dhcpOpt.DhcpOptionsId))
 			}
 		}
-		return true
-	}
-	err := client.DescribeDhcpOptionsPagesWithContext(ctx,
-		&ec2.DescribeDhcpOptionsInput{Filters: o.ec2Filters()},
-		deleteDHCPOptions)
-	if err != nil {
-		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) DestroyEIPs(ctx context.Context, client ec2iface.EC2API) []error {
+func (o *DestroyInfraOptions) DestroyEIPs(ctx context.Context, client awsapi.EC2API) []error {
 	var errs []error
-	out, err := client.DescribeAddressesWithContext(ctx, &ec2.DescribeAddressesInput{
+	out, err := client.DescribeAddresses(ctx, &ec2.DescribeAddressesInput{
 		Filters: o.ec2Filters(),
 	})
 	if err != nil {
@@ -891,32 +874,32 @@ func (o *DestroyInfraOptions) DestroyEIPs(ctx context.Context, client ec2iface.E
 	}
 
 	for _, addr := range out.Addresses {
-		_, err := client.ReleaseAddressWithContext(ctx, &ec2.ReleaseAddressInput{
+		_, err := client.ReleaseAddress(ctx, &ec2.ReleaseAddressInput{
 			AllocationId: addr.AllocationId,
 		})
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			o.Log.Info("Deleted EIP", "id", aws.StringValue(addr.AllocationId))
+			o.Log.Info("Deleted EIP", "id", aws.ToString(addr.AllocationId))
 		}
 	}
 	return errs
 }
 
-func (o *DestroyInfraOptions) ec2Filters() []*ec2.Filter {
-	return []*ec2.Filter{
+func (o *DestroyInfraOptions) ec2Filters() []ec2types.Filter {
+	return []ec2types.Filter{
 		{
 			Name:   aws.String(fmt.Sprintf("tag:%s", clusterTag(o.InfraID))),
-			Values: []*string{aws.String(clusterTagValue)},
+			Values: []string{clusterTagValue},
 		},
 	}
 }
 
-func vpcFilter(vpcID *string) []*ec2.Filter {
-	return []*ec2.Filter{
+func vpcFilter(vpcID string) []ec2types.Filter {
+	return []ec2types.Filter{
 		{
 			Name:   aws.String("vpc-id"),
-			Values: []*string{vpcID},
+			Values: []string{vpcID},
 		},
 	}
 }

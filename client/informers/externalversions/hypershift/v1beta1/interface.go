@@ -23,10 +23,14 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// AzurePrivateLinkServices returns a AzurePrivateLinkServiceInformer.
+	AzurePrivateLinkServices() AzurePrivateLinkServiceInformer
 	// CertificateSigningRequestApprovals returns a CertificateSigningRequestApprovalInformer.
 	CertificateSigningRequestApprovals() CertificateSigningRequestApprovalInformer
 	// GCPPrivateServiceConnects returns a GCPPrivateServiceConnectInformer.
 	GCPPrivateServiceConnects() GCPPrivateServiceConnectInformer
+	// HCPEtcdBackups returns a HCPEtcdBackupInformer.
+	HCPEtcdBackups() HCPEtcdBackupInformer
 	// HostedClusters returns a HostedClusterInformer.
 	HostedClusters() HostedClusterInformer
 	// HostedControlPlanes returns a HostedControlPlaneInformer.
@@ -46,6 +50,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
+// AzurePrivateLinkServices returns a AzurePrivateLinkServiceInformer.
+func (v *version) AzurePrivateLinkServices() AzurePrivateLinkServiceInformer {
+	return &azurePrivateLinkServiceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // CertificateSigningRequestApprovals returns a CertificateSigningRequestApprovalInformer.
 func (v *version) CertificateSigningRequestApprovals() CertificateSigningRequestApprovalInformer {
 	return &certificateSigningRequestApprovalInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -54,6 +63,11 @@ func (v *version) CertificateSigningRequestApprovals() CertificateSigningRequest
 // GCPPrivateServiceConnects returns a GCPPrivateServiceConnectInformer.
 func (v *version) GCPPrivateServiceConnects() GCPPrivateServiceConnectInformer {
 	return &gCPPrivateServiceConnectInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// HCPEtcdBackups returns a HCPEtcdBackupInformer.
+func (v *version) HCPEtcdBackups() HCPEtcdBackupInformer {
+	return &hCPEtcdBackupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // HostedClusters returns a HostedClusterInformer.

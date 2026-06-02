@@ -35,6 +35,7 @@ import (
 	fakecapabilities "github.com/openshift/hypershift/support/capabilities/fake"
 	"github.com/openshift/hypershift/support/config"
 	controlplanecomponent "github.com/openshift/hypershift/support/controlplane-component"
+	"github.com/openshift/hypershift/support/k8sutil"
 	"github.com/openshift/hypershift/support/releaseinfo"
 	"github.com/openshift/hypershift/support/releaseinfo/registryclient"
 	"github.com/openshift/hypershift/support/releaseinfo/testutils"
@@ -107,6 +108,7 @@ func (rp fakeReleaseProvider) GetMetadataProvider() hyperutil.ImageMetadataProvi
 }
 
 func TestHasBeenAvailable(t *testing.T) {
+	t.Parallel()
 	mockCtrl := gomock.NewController(t)
 	now := time.Now().Truncate(time.Second)
 	reconcilerNow := metav1.Time{Time: now.Add(time.Second)}
@@ -251,6 +253,7 @@ func TestHasBeenAvailable(t *testing.T) {
 }
 
 func TestReconcileHostedControlPlaneAdditionalTrustBundle(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name                          string
 		cluster                       hyperv1.HostedCluster
@@ -308,6 +311,7 @@ func TestReconcileHostedControlPlaneAdditionalTrustBundle(t *testing.T) {
 }
 
 func TestReconcileHostedControlPlaneUpgrades(t *testing.T) {
+	t.Parallel()
 	// TODO: the spec/status comparison of control plane is a weak check; the
 	// conditions should give us more information about e.g. whether that
 	// image ever _will_ be achieved (e.g. if the problem is fatal)
@@ -411,6 +415,7 @@ func TestReconcileHostedControlPlaneUpgrades(t *testing.T) {
 }
 
 func TestComputeHostedClusterAvailability(t *testing.T) {
+	t.Parallel()
 	tests := map[string]struct {
 		Cluster           hyperv1.HostedCluster
 		ControlPlane      *hyperv1.HostedControlPlane
@@ -494,6 +499,7 @@ func TestComputeHostedClusterAvailability(t *testing.T) {
 }
 
 func TestReconcileHostedControlPlaneAPINetwork(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name                        string
 		networking                  *hyperv1.APIServerNetworking
@@ -554,6 +560,7 @@ func TestReconcileHostedControlPlaneAPINetwork(t *testing.T) {
 }
 
 func TestReconcileHostedControlPlaneConfiguration(t *testing.T) {
+	t.Parallel()
 	idp := configv1.IdentityProvider{
 		Name: "htpasswd",
 		IdentityProviderConfig: configv1.IdentityProviderConfig{
@@ -604,6 +611,7 @@ func TestReconcileHostedControlPlaneConfiguration(t *testing.T) {
 }
 
 func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
+	t.Parallel()
 	type testCase struct {
 		name                              string
 		hcpAnnotations                    map[string]string
@@ -626,7 +634,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			},
 			expectedAnnotations: map[string]string{
 				hyperv1.SwiftPodNetworkInstanceAnnotation:          "swift-network-instance",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -639,7 +647,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			expectedAnnotations: map[string]string{
 				hyperv1.RestartDateAnnotation:                      "01012024",
 				previouslySyncedRestartDateAnnotation:              "01012024",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -656,7 +664,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			expectedAnnotations: map[string]string{
 				hyperv1.RestartDateAnnotation:                      "05012024",
 				previouslySyncedRestartDateAnnotation:              "05012024",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -673,7 +681,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			expectedAnnotations: map[string]string{
 				hyperv1.RestartDateAnnotation:                      "some other value",
 				previouslySyncedRestartDateAnnotation:              "01012024",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -690,7 +698,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			expectedAnnotations: map[string]string{
 				hyperv1.RestartDateAnnotation:                      "05012024",
 				previouslySyncedRestartDateAnnotation:              "05012024",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -698,7 +706,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 		{
 			name: "Initial reconcile",
 			hcAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:                         "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation:                           "control-plane-operator",
 				hyperv1.EtcdPriorityClass:                                    "high-priority",
 				hyperv1.RequestServingNodeAdditionalSelectorAnnotation:       "node-size=m5xl",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test1": "test1",
@@ -707,13 +715,13 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 				"foo":                                                        "bar", // should not be copied
 			},
 			expectedAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:                         "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation:                           "control-plane-operator",
 				hyperv1.EtcdPriorityClass:                                    "high-priority",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test1": "test1",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test2": "test2",
 				hyperv1.KubeAPIServerGoAwayChance:                            "0.001",
 				hyperv1.RequestServingNodeAdditionalSelectorAnnotation:       "node-size=m5xl",
-				hyperutil.HostedClusterAnnotation:                            hcKey,
+				k8sutil.HostedClusterAnnotation:                              hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:                   "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation:           "true",
 			},
@@ -721,7 +729,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 		{
 			name: "Initial reconcile - autoscaling needed",
 			hcAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:                         "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation:                           "control-plane-operator",
 				hyperv1.EtcdPriorityClass:                                    "high-priority",
 				hyperv1.RequestServingNodeAdditionalSelectorAnnotation:       "node-size=m5xl",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test1": "test1",
@@ -729,12 +737,12 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 				"foo": "bar",
 			},
 			expectedAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:                         "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation:                           "control-plane-operator",
 				hyperv1.EtcdPriorityClass:                                    "high-priority",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test1": "test1",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test2": "test2",
 				hyperv1.RequestServingNodeAdditionalSelectorAnnotation:       "node-size=m5xl",
-				hyperutil.HostedClusterAnnotation:                            hcKey,
+				k8sutil.HostedClusterAnnotation:                              hcKey,
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation:           "true",
 			},
 			isAutoscalingNeeded: true,
@@ -742,14 +750,14 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 		{
 			name: "Existing disable autoscaling annotation, autoscaling no longer needed",
 			hcAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation: "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation: "control-plane-operator",
 			},
 			hcpAnnotations: map[string]string{
 				hyperv1.DisableClusterAutoscalerAnnotation: "true",
 			},
 			expectedAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:               "control-plane-operator",
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.DebugDeploymentsAnnotation:                 "control-plane-operator",
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
 			isAutoscalingNeeded: true,
@@ -766,7 +774,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 				"foo": "bar",
 			},
 			hcpAnnotations: map[string]string{
-				hyperutil.DebugDeploymentsAnnotation:                           "control-plane-operator",
+				k8sutil.DebugDeploymentsAnnotation:                             "control-plane-operator",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test1":   "test1",
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test3":   "test3",
 				hyperv1.ResourceRequestOverrideAnnotationPrefix + "-override4": "override4",
@@ -780,7 +788,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 				hyperv1.IdentityProviderOverridesAnnotationPrefix + "-test2":   "test2",
 				hyperv1.ResourceRequestOverrideAnnotationPrefix + "-override1": "override1",
 				hyperv1.ResourceRequestOverrideAnnotationPrefix + "-override2": "override2",
-				hyperutil.HostedClusterAnnotation:                              hcKey,
+				k8sutil.HostedClusterAnnotation:                                hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:                     "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation:             "true",
 				"unrelated": "test",
@@ -793,7 +801,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			},
 			hcpAnnotations: map[string]string{},
 			expectedAnnotations: map[string]string{
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.AWSKarpenterDefaultInstanceProfile:         "test-instance-profile",
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
@@ -805,7 +813,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			hcAnnotations:                     map[string]string{},
 			hcpAnnotations:                    map[string]string{},
 			expectedAnnotations: map[string]string{
-				hyperutil.HostedClusterAnnotation:          hcKey,
+				k8sutil.HostedClusterAnnotation:            hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation: "true",
 			},
 		},
@@ -815,7 +823,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 			hcAnnotations:                     map[string]string{},
 			hcpAnnotations:                    map[string]string{},
 			expectedAnnotations: map[string]string{
-				hyperutil.HostedClusterAnnotation:                  hcKey,
+				k8sutil.HostedClusterAnnotation:                    hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation:         "true",
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
@@ -828,7 +836,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 				hyperv1.DisableAWSNodeTerminationHandlerAnnotation: "true",
 			},
 			expectedAnnotations: map[string]string{
-				hyperutil.HostedClusterAnnotation:          hcKey,
+				k8sutil.HostedClusterAnnotation:            hcKey,
 				hyperv1.DisableClusterAutoscalerAnnotation: "true",
 			},
 		},
@@ -851,6 +859,7 @@ func TestReconcileHostedControlPlaneAnnotations(t *testing.T) {
 }
 
 func TestAnnotationsForCertRenewal(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name             string
 		shouldSkip       bool
@@ -923,6 +932,7 @@ func TestAnnotationsForCertRenewal(t *testing.T) {
 }
 
 func TestShouldCheckForStaleCerts(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		hcAnnotations  map[string]string
@@ -974,6 +984,7 @@ func TestShouldCheckForStaleCerts(t *testing.T) {
 }
 
 func TestServiceFirstNodePortAvailable(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name              string
 		inputService      *corev1.Service
@@ -1034,6 +1045,7 @@ func TestServiceFirstNodePortAvailable(t *testing.T) {
 }
 
 func TestServicePublishingStrategyByType(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name                              string
 		inputHostedCluster                *hyperv1.HostedCluster
@@ -1095,6 +1107,7 @@ func TestServicePublishingStrategyByType(t *testing.T) {
 }
 
 func TestReconcileCAPICluster(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name               string
 		capiCluster        *v1beta1.Cluster
@@ -1140,7 +1153,7 @@ func TestReconcileCAPICluster(t *testing.T) {
 			expectedCAPICluster: &v1beta1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						hyperutil.HostedClusterAnnotation: "master/cluster1",
+						k8sutil.HostedClusterAnnotation: "master/cluster1",
 					},
 					Namespace: "master-cluster1",
 					Name:      "cluster1",
@@ -1198,7 +1211,7 @@ func TestReconcileCAPICluster(t *testing.T) {
 			expectedCAPICluster: &v1beta1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						hyperutil.HostedClusterAnnotation: "master/cluster1",
+						k8sutil.HostedClusterAnnotation: "master/cluster1",
 					},
 					Namespace: "master-cluster1",
 					Name:      "cluster1",
@@ -1234,6 +1247,7 @@ func TestReconcileCAPICluster(t *testing.T) {
 }
 
 func TestReconcileAWSResourceTags(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name     string
 		in       hyperv1.HostedClusterSpec
@@ -1489,6 +1503,7 @@ func TestHostedClusterWatchesEverythingItCreates(t *testing.T) {
 					Namespace: "test",
 					Annotations: map[string]string{
 						hyperv1.AllowUnsupportedKubeVirtRHCOSVariantsAnnotation: "true",
+						hyperv1.ClusterAPIKubeVirtProviderImage:                 "registry.ci.openshift.org/ocp/4.18:cluster-api-provider-kubevirt",
 					},
 				},
 				Spec: hyperv1.HostedClusterSpec{
@@ -1724,7 +1739,7 @@ func TestHostedClusterWatchesEverythingItCreates(t *testing.T) {
 				},
 			},
 			Data: map[string]string{
-				"supported-versions": "{\"versions\":[\"4.21\",\"4.20\",\"4.19\",\"4.18\",\"4.17\",\"4.16\",\"4.15\",\"4.14\"]}",
+				"supported-versions": "{\"versions\":[\"4.22\",\"4.21\",\"4.20\",\"4.19\",\"4.18\",\"4.17\",\"4.16\",\"4.15\",\"4.14\"]}",
 				"server-version":     "some-fake-server-version",
 			},
 		},
@@ -1833,6 +1848,7 @@ func TestHostedClusterWatchesEverythingItCreates(t *testing.T) {
 }
 
 func TestReconcileCLISecrets(t *testing.T) {
+	t.Parallel()
 	const (
 		infraID = "infraId"
 		ns      = "myns"
@@ -2040,6 +2056,7 @@ func (c *createTypeTrackingClient) Create(ctx context.Context, obj crclient.Obje
 }
 
 func TestValidateConfigAndClusterCapabilities(t *testing.T) {
+	t.Parallel()
 
 	// For network test below.
 	clusterNet := make([]hyperv1.ClusterNetworkEntry, 2)
@@ -2135,7 +2152,7 @@ func TestValidateConfigAndClusterCapabilities(t *testing.T) {
 								Type: hyperv1.NodePort,
 								NodePort: &hyperv1.NodePortPublishingStrategy{
 									Address: "172.16.3.3",
-									Port:    4433,
+									Port:    30443,
 								},
 							},
 						},
@@ -2254,6 +2271,7 @@ func TestValidateConfigAndClusterCapabilities(t *testing.T) {
 }
 
 func TestValidateReleaseImage(t *testing.T) {
+	t.Parallel()
 	mockCtrl := gomock.NewController(t)
 	testCases := []struct {
 		name                  string
@@ -2676,6 +2694,7 @@ var equateErrorMessage = cmp.FilterValues(func(x, y interface{}) bool {
 }))
 
 func TestPauseHostedControlPlane(t *testing.T) {
+	t.Parallel()
 	fakePauseAnnotationValue := "true"
 	fakeHCPName := "cluster1"
 	fakeHCPNamespace := "master-cluster1"
@@ -2732,6 +2751,7 @@ func TestPauseHostedControlPlane(t *testing.T) {
 }
 
 func TestPauseCAPICluster(t *testing.T) {
+	t.Parallel()
 	fakeHCName := "cluster1"
 	fakeHCNamespace := "master"
 	fakeInfraID := "infra-123"
@@ -2884,6 +2904,7 @@ func TestPauseCAPICluster(t *testing.T) {
 }
 
 func TestDefaultClusterIDsIfNeeded(t *testing.T) {
+	t.Parallel()
 	testHC := func(infraID, clusterID string) *hyperv1.HostedCluster {
 		return &hyperv1.HostedCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2944,6 +2965,7 @@ func TestDefaultClusterIDsIfNeeded(t *testing.T) {
 }
 
 func TestIsUpgradeable(t *testing.T) {
+	t.Parallel()
 	mockCtrl := gomock.NewController(t)
 	releaseImageFrom := "image-4.13"
 	releaseImageTo := "image-4.14"
@@ -3182,6 +3204,7 @@ func TestIsUpgradeable(t *testing.T) {
 }
 
 func TestReconciliationSuccessConditionSetting(t *testing.T) {
+	t.Parallel()
 
 	// Serialization seems to round to seconds, so we have to do the
 	// same to be able to compare.
@@ -3331,6 +3354,7 @@ func TestReconciliationSuccessConditionSetting(t *testing.T) {
 }
 
 func TestIsProgressing(t *testing.T) {
+	t.Parallel()
 	mockCtrl := gomock.NewController(t)
 	tests := []struct {
 		name       string
@@ -3586,7 +3610,173 @@ func TestIsProgressing(t *testing.T) {
 	}
 }
 
+func TestComputeAWSDefaultSGDeletedCondition(t *testing.T) {
+	t.Parallel()
+
+	deletionTime := metav1.Now()
+
+	tests := []struct {
+		name        string
+		hcluster    *hyperv1.HostedCluster
+		hcp         *hyperv1.HostedControlPlane
+		wantChanged bool
+		wantStatus  metav1.ConditionStatus
+	}{
+		{
+			name: "When platform is Azure, it should not set the condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AzurePlatform},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+			},
+			wantChanged: false,
+		},
+		{
+			name: "When platform is KubeVirt, it should not set the condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.KubevirtPlatform},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+			},
+			wantChanged: false,
+		},
+		{
+			name: "When platform is AWS and HCP is nil, it should not set the condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+			},
+			hcp:         nil,
+			wantChanged: false,
+		},
+		{
+			name: "When platform is AWS and HCP is not being deleted, it should not set the condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+			},
+			hcp:         &hyperv1.HostedControlPlane{},
+			wantChanged: false,
+		},
+		{
+			name: "When platform is AWS and HCP is being deleted with no SG condition, it should set Unknown condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+			},
+			wantChanged: true,
+			wantStatus:  metav1.ConditionUnknown,
+		},
+		{
+			name: "When platform is AWS and HCP has SG deleted condition, it should propagate that condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+				Status: hyperv1.HostedControlPlaneStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(hyperv1.AWSDefaultSecurityGroupDeleted),
+							Status:  metav1.ConditionTrue,
+							Reason:  "Deleted",
+							Message: "Security group deleted",
+						},
+					},
+				},
+			},
+			wantChanged: true,
+			wantStatus:  metav1.ConditionTrue,
+		},
+		{
+			name: "When platform is AWS and HCP has SG deletion blocked, it should propagate the False condition",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+				Status: hyperv1.HostedControlPlaneStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(hyperv1.AWSDefaultSecurityGroupDeleted),
+							Status:  metav1.ConditionFalse,
+							Reason:  "DeletionBlocked",
+							Message: "security group still in use",
+						},
+					},
+				},
+			},
+			wantChanged: true,
+			wantStatus:  metav1.ConditionFalse,
+		},
+		{
+			name: "When HC already has the same condition message, it should not report a change",
+			hcluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{Type: hyperv1.AWSPlatform},
+				},
+				Status: hyperv1.HostedClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(hyperv1.AWSDefaultSecurityGroupDeleted),
+							Status:  metav1.ConditionTrue,
+							Reason:  "Deleted",
+							Message: "Security group deleted",
+						},
+					},
+				},
+			},
+			hcp: &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &deletionTime},
+				Status: hyperv1.HostedControlPlaneStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(hyperv1.AWSDefaultSecurityGroupDeleted),
+							Status:  metav1.ConditionTrue,
+							Reason:  "Deleted",
+							Message: "Security group deleted",
+						},
+					},
+				},
+			},
+			wantChanged: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+
+			condition, changed := computeAWSDefaultSGDeletedCondition(tt.hcluster, tt.hcp)
+			g.Expect(changed).To(Equal(tt.wantChanged))
+			if tt.wantChanged {
+				g.Expect(condition).ToNot(BeNil())
+				g.Expect(condition.Type).To(Equal(string(hyperv1.AWSDefaultSecurityGroupDeleted)))
+				g.Expect(condition.Status).To(Equal(tt.wantStatus))
+			}
+		})
+	}
+}
+
 func TestComputeAWSEndpointServiceCondition(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name                string
 		endpointAConditions []metav1.Condition
@@ -3726,6 +3916,7 @@ func TestComputeAWSEndpointServiceCondition(t *testing.T) {
 }
 
 func TestValidateSliceNetworkCIDRs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		mn          []hyperv1.MachineNetworkEntry
@@ -3916,6 +4107,7 @@ func TestValidateSliceNetworkCIDRs(t *testing.T) {
 }
 
 func TestCheckAdvertiseAddressOverlapping(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		mn      []hyperv1.MachineNetworkEntry
@@ -3988,6 +4180,7 @@ func TestCheckAdvertiseAddressOverlapping(t *testing.T) {
 }
 
 func TestFindAdvertiseAddress(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name             string
 		aa               *hyperv1.APIServerNetworking
@@ -4057,6 +4250,7 @@ func TestFindAdvertiseAddress(t *testing.T) {
 }
 
 func TestValidateNetworkStackAddresses(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		cn      []hyperv1.ClusterNetworkEntry
@@ -4169,6 +4363,7 @@ func TestValidateNetworkStackAddresses(t *testing.T) {
 }
 
 func TestKubevirtETCDEncKey(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name           string
 		hc             *hyperv1.HostedCluster
@@ -4616,6 +4811,7 @@ func TestKubevirtETCDEncKey(t *testing.T) {
 }
 
 func TestReconcileComponents(t *testing.T) {
+	t.Parallel()
 	mockCtrl := gomock.NewController(t)
 	mockedProviderWithOpenshiftImageRegistryOverrides := releaseinfo.NewMockProviderWithOpenShiftImageRegistryOverrides(mockCtrl)
 	mockedProviderWithOpenshiftImageRegistryOverrides.EXPECT().
@@ -4637,12 +4833,12 @@ func TestReconcileComponents(t *testing.T) {
 				AWS:  &hyperv1.AWSPlatformSpec{},
 			},
 			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.16.10-x86_64",
-			AutoNode: &hyperv1.AutoNode{
-				Provisioner: &hyperv1.ProvisionerConfig{
+			AutoNode: hyperv1.AutoNode{
+				Provisioner: hyperv1.ProvisionerConfig{
 					Name: "test-provisioner",
-					Karpenter: &hyperv1.KarpenterConfig{
+					Karpenter: hyperv1.KarpenterConfig{
 						Platform: hyperv1.AWSPlatform,
-						AWS: &hyperv1.KarpenterAWSConfig{
+						AWS: hyperv1.KarpenterAWSConfig{
 							RoleARN: "some-fake-arn",
 						},
 					},
@@ -4716,7 +4912,7 @@ func TestReconcileComponents(t *testing.T) {
 			t.Fatalf("failed to get deployment: %v", err)
 		}
 
-		yaml, err := hyperutil.SerializeResource(deployment, api.Scheme)
+		yaml, err := k8sutil.SerializeResource(deployment, api.Scheme)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4738,7 +4934,7 @@ func TestReconcileComponents(t *testing.T) {
 			controlPaneComponent.Status.Conditions[i].LastTransitionTime = metav1.Time{}
 		}
 
-		yaml, err = hyperutil.SerializeResource(controlPaneComponent, api.Scheme)
+		yaml, err = k8sutil.SerializeResource(controlPaneComponent, api.Scheme)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4854,6 +5050,7 @@ func TestEnsureHostedResourcesAreEmpty(t *testing.T) {
 }
 
 func TestReconcileAdditionalTrustBundle(t *testing.T) {
+	t.Parallel()
 	const (
 		testNamespace            = "test-ns"
 		controlPlaneNamespace    = "test-hcp-ns"
@@ -5026,6 +5223,7 @@ func TestReconcileAdditionalTrustBundle(t *testing.T) {
 }
 
 func TestValidateNodePortVsServiceNetwork(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name              string
 		hostedCluster     *hyperv1.HostedCluster
@@ -5077,7 +5275,334 @@ func TestValidateNodePortVsServiceNetwork(t *testing.T) {
 	}
 }
 
+func TestParseNodePortRange(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name        string
+		rangeStr    string
+		expectedMin int32
+		expectedMax int32
+		expectError bool
+	}{
+		{
+			name:        "empty range uses default",
+			rangeStr:    "",
+			expectedMin: 30000,
+			expectedMax: 32767,
+			expectError: false,
+		},
+		{
+			name:        "valid default range",
+			rangeStr:    "30000-32767",
+			expectedMin: 30000,
+			expectedMax: 32767,
+			expectError: false,
+		},
+		{
+			name:        "valid custom range",
+			rangeStr:    "25000-35000",
+			expectedMin: 25000,
+			expectedMax: 35000,
+			expectError: false,
+		},
+		{
+			name:        "valid small range",
+			rangeStr:    "31000-31010",
+			expectedMin: 31000,
+			expectedMax: 31010,
+			expectError: false,
+		},
+		{
+			name:        "invalid format - no dash",
+			rangeStr:    "30000",
+			expectError: true,
+		},
+		{
+			name:        "invalid format - multiple dashes",
+			rangeStr:    "30000-31000-32000",
+			expectError: true,
+		},
+		{
+			name:        "invalid minimum port",
+			rangeStr:    "abc-32767",
+			expectError: true,
+		},
+		{
+			name:        "invalid maximum port",
+			rangeStr:    "30000-xyz",
+			expectError: true,
+		},
+		{
+			name:        "negative port",
+			rangeStr:    "-1-32767",
+			expectError: true,
+		},
+		{
+			name:        "port too large",
+			rangeStr:    "30000-99999",
+			expectedMin: 30000,
+			expectedMax: 99999,
+			expectError: false, // parseNodePortRange doesn't validate port limits
+		},
+		{
+			name:        "min greater than max - invalid range",
+			rangeStr:    "32767-30000",
+			expectError: true,
+		},
+		{
+			name:        "min equals max - valid single port range",
+			rangeStr:    "31000-31000",
+			expectedMin: 31000,
+			expectedMax: 31000,
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			min, max, err := parseNodePortRange(tc.rangeStr)
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if min != tc.expectedMin {
+					t.Errorf("expected min %d, got %d", tc.expectedMin, min)
+				}
+				if max != tc.expectedMax {
+					t.Errorf("expected max %d, got %d", tc.expectedMax, max)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateNodePortPortRange(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name              string
+		hostedCluster     *hyperv1.HostedCluster
+		expectedErrorList field.ErrorList
+	}{
+		{
+			name: "valid port in default range",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    31000,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "port 0 for dynamic assignment - always valid",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "port below default range",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    10000,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorList: field.ErrorList{
+				field.Invalid(field.NewPath("spec.services[0].nodePort.port"), int32(10000), "port must be within the configured range 30000-32767 or 0 for dynamic assignment"),
+			},
+		},
+		{
+			name: "port above default range",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    65000,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorList: field.ErrorList{
+				field.Invalid(field.NewPath("spec.services[0].nodePort.port"), int32(65000), "port must be within the configured range 30000-32767 or 0 for dynamic assignment"),
+			},
+		},
+		{
+			name: "valid port in custom range",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Configuration: &hyperv1.ClusterConfiguration{
+						Network: &configv1.NetworkSpec{
+							ServiceNodePortRange: "25000-35000",
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    28000,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "port outside custom range",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Configuration: &hyperv1.ClusterConfiguration{
+						Network: &configv1.NetworkSpec{
+							ServiceNodePortRange: "25000-35000",
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    40000,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorList: field.ErrorList{
+				field.Invalid(field.NewPath("spec.services[0].nodePort.port"), int32(40000), "port must be within the configured range 25000-35000 or 0 for dynamic assignment"),
+			},
+		},
+		{
+			name: "invalid range format",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Configuration: &hyperv1.ClusterConfiguration{
+						Network: &configv1.NetworkSpec{
+							ServiceNodePortRange: "invalid-range",
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    31000,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorList: field.ErrorList{
+				field.Invalid(field.NewPath("spec.configuration.network.serviceNodePortRange"), "invalid-range", "invalid ServiceNodePortRange format: invalid minimum port: invalid"),
+			},
+		},
+		{
+			name: "reversed range - min greater than max",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Configuration: &hyperv1.ClusterConfiguration{
+						Network: &configv1.NetworkSpec{
+							ServiceNodePortRange: "35000-25000",
+						},
+					},
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.NodePort,
+								NodePort: &hyperv1.NodePortPublishingStrategy{
+									Address: "1.1.1.1",
+									Port:    31000,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorList: field.ErrorList{
+				field.Invalid(field.NewPath("spec.configuration.network.serviceNodePortRange"), "35000-25000", "invalid ServiceNodePortRange format: invalid range: minimum port 35000 must be less than or equal to maximum port 25000"),
+			},
+		},
+		{
+			name: "no nodeport service - no validation",
+			hostedCluster: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Services: []hyperv1.ServicePublishingStrategyMapping{
+						{
+							Service: hyperv1.APIServer,
+							ServicePublishingStrategy: hyperv1.ServicePublishingStrategy{
+								Type: hyperv1.LoadBalancer,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := validateNodePortPortRange(tc.hostedCluster)
+			if diff := cmp.Diff(actual, tc.expectedErrorList, equateErrorMessage); diff != "" {
+				t.Errorf("actual validation result differs from expected: %s", diff)
+			}
+		})
+	}
+}
+
 func TestServiceAccountSigningKeyBytes(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// Helper function to generate a test RSA key pair
@@ -5254,6 +5779,7 @@ func TestServiceAccountSigningKeyBytes(t *testing.T) {
 }
 
 func TestIsAWSNodeTerminationHandlerNeeded(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name           string
 		hcluster       *hyperv1.HostedCluster
@@ -5313,6 +5839,72 @@ func TestIsAWSNodeTerminationHandlerNeeded(t *testing.T) {
 					},
 					Spec: hyperv1.NodePoolSpec{
 						ClusterName: "test-cluster",
+					},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "When AWS platform with NodePool with spot market type it should return true",
+			hcluster: &hyperv1.HostedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AWSPlatform,
+					},
+				},
+			},
+			nodePools: []crclient.Object{
+				&hyperv1.NodePool{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "nodepool-spot-api",
+						Namespace: "test-namespace",
+					},
+					Spec: hyperv1.NodePoolSpec{
+						ClusterName: "test-cluster",
+						Platform: hyperv1.NodePoolPlatform{
+							AWS: &hyperv1.AWSNodePoolPlatform{
+								Placement: &hyperv1.PlacementOptions{
+									MarketType: hyperv1.MarketTypeSpot,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "When AWS platform with NodePool with non-spot market type it should return false",
+			hcluster: &hyperv1.HostedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AWSPlatform,
+					},
+				},
+			},
+			nodePools: []crclient.Object{
+				&hyperv1.NodePool{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "nodepool-on-demand",
+						Namespace: "test-namespace",
+					},
+					Spec: hyperv1.NodePoolSpec{
+						ClusterName: "test-cluster",
+						Platform: hyperv1.NodePoolPlatform{
+							AWS: &hyperv1.AWSNodePoolPlatform{
+								Placement: &hyperv1.PlacementOptions{
+									MarketType: hyperv1.MarketTypeOnDemand,
+								},
+							},
+						},
 					},
 				},
 			},
@@ -5438,6 +6030,7 @@ func TestIsAWSNodeTerminationHandlerNeeded(t *testing.T) {
 }
 
 func TestComputeGCPPSCCondition(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		pscConditions []metav1.Condition
@@ -5595,6 +6188,549 @@ func TestComputeGCPPSCCondition(t *testing.T) {
 			if condition != tc.expected {
 				t.Errorf("error, expected %v\nbut got %v", tc.expected, condition)
 			}
+		})
+	}
+}
+
+func TestReconcileCustomExternalKubeconfig(t *testing.T) {
+	t.Parallel()
+	hcpNamespace := "test-hcp-ns"
+	hclusterNamespace := "test-hc-ns"
+	hclusterName := "test-cluster"
+
+	tests := []struct {
+		name           string
+		hcpStatus      *hyperv1.KubeconfigSecretRef
+		secretExists   bool
+		expectRequeue  bool
+		expectError    bool
+		expectDestCopy bool
+	}{
+		{
+			name:      "When CustomKubeconfig status is nil it should be a no-op",
+			hcpStatus: nil,
+		},
+		{
+			name: "When CustomKubeconfig references a non-existent secret it should continue and requeue",
+			hcpStatus: &hyperv1.KubeconfigSecretRef{
+				Name: "custom-admin-kubeconfig",
+				Key:  "kubeconfig",
+			},
+			secretExists:  false,
+			expectRequeue: true,
+		},
+		{
+			name: "When CustomKubeconfig references an existing secret it should copy it",
+			hcpStatus: &hyperv1.KubeconfigSecretRef{
+				Name: "custom-admin-kubeconfig",
+				Key:  "kubeconfig",
+			},
+			secretExists:   true,
+			expectDestCopy: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+
+			hcp := &hyperv1.HostedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: hcpNamespace,
+					Name:      hclusterName,
+				},
+				Status: hyperv1.HostedControlPlaneStatus{
+					CustomKubeconfig: tc.hcpStatus,
+				},
+			}
+
+			hcluster := &hyperv1.HostedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: hclusterNamespace,
+					Name:      hclusterName,
+					UID:       "test-uid",
+				},
+			}
+
+			objs := []crclient.Object{hcp}
+			if tc.secretExists {
+				objs = append(objs, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: hcpNamespace,
+						Name:      "custom-admin-kubeconfig",
+					},
+					Data: map[string][]byte{
+						"kubeconfig": []byte("test-kubeconfig-data"),
+					},
+				})
+			}
+
+			cli := fake.NewClientBuilder().WithScheme(api.Scheme).WithObjects(objs...).Build()
+			r := &HostedClusterReconciler{Client: cli}
+			ctx := ctrl.LoggerInto(t.Context(), zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
+
+			requeue, err := r.reconcileCustomExternalKubeconfig(ctx, ctrl.CreateOrUpdate, hcp, hcluster)
+
+			if tc.expectError {
+				g.Expect(err).ToNot(BeNil())
+				return
+			}
+			g.Expect(err).To(BeNil())
+
+			if tc.expectRequeue {
+				g.Expect(requeue).ToNot(BeNil(), "expected a requeue duration")
+			} else {
+				g.Expect(requeue).To(BeNil(), "did not expect a requeue")
+			}
+
+			if tc.expectDestCopy {
+				dest := &corev1.Secret{}
+				err := cli.Get(ctx, crclient.ObjectKey{Namespace: hclusterNamespace, Name: hclusterName + "-custom-admin-kubeconfig"}, dest)
+				g.Expect(err).To(BeNil(), "expected destination secret to exist")
+				g.Expect(dest.Data["kubeconfig"]).To(Equal([]byte("test-kubeconfig-data")))
+			}
+		})
+	}
+}
+
+func TestComputeAzurePLSCondition(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		plsConditions []metav1.Condition
+		conditionType hyperv1.ConditionType
+		expected      metav1.Condition
+	}{
+		{
+			name: "When AzurePrivateLinkServiceAvailable is true it should return condition true",
+			plsConditions: []metav1.Condition{
+				{
+					Type:    string(hyperv1.AzurePrivateLinkServiceAvailable),
+					Status:  metav1.ConditionTrue,
+					Reason:  hyperv1.AzurePLSSuccessReason,
+					Message: hyperv1.AllIsWellMessage,
+				},
+			},
+			conditionType: hyperv1.AzurePrivateLinkServiceAvailable,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzurePrivateLinkServiceAvailable),
+				Status:  metav1.ConditionTrue,
+				Reason:  hyperv1.AzurePLSSuccessReason,
+				Message: hyperv1.AllIsWellMessage,
+			},
+		},
+		{
+			name: "When AzurePLSCreated is false it should return condition false",
+			plsConditions: []metav1.Condition{
+				{
+					Type:    string(hyperv1.AzurePLSCreated),
+					Status:  metav1.ConditionFalse,
+					Reason:  hyperv1.AzurePLSErrorReason,
+					Message: "PLS creation failed",
+				},
+			},
+			conditionType: hyperv1.AzurePLSCreated,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzurePLSCreated),
+				Status:  metav1.ConditionFalse,
+				Reason:  hyperv1.AzurePLSErrorReason,
+				Message: "PLS creation failed",
+			},
+		},
+		{
+			name:          "When PLS has no conditions it should return condition unknown",
+			plsConditions: []metav1.Condition{},
+			conditionType: hyperv1.AzurePrivateLinkServiceAvailable,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzurePrivateLinkServiceAvailable),
+				Status:  metav1.ConditionUnknown,
+				Reason:  hyperv1.StatusUnknownReason,
+				Message: "AzurePrivateLinkService conditions not found",
+			},
+		},
+		{
+			name: "When AzureInternalLoadBalancerAvailable is true it should return condition true",
+			plsConditions: []metav1.Condition{
+				{
+					Type:    string(hyperv1.AzureInternalLoadBalancerAvailable),
+					Status:  metav1.ConditionTrue,
+					Reason:  hyperv1.AzurePLSSuccessReason,
+					Message: "Internal Load Balancer found",
+				},
+			},
+			conditionType: hyperv1.AzureInternalLoadBalancerAvailable,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzureInternalLoadBalancerAvailable),
+				Status:  metav1.ConditionTrue,
+				Reason:  hyperv1.AzurePLSSuccessReason,
+				Message: hyperv1.AllIsWellMessage,
+			},
+		},
+		{
+			name: "When AzurePrivateEndpointAvailable is true it should return condition true",
+			plsConditions: []metav1.Condition{
+				{
+					Type:    string(hyperv1.AzurePrivateEndpointAvailable),
+					Status:  metav1.ConditionTrue,
+					Reason:  hyperv1.AzurePLSSuccessReason,
+					Message: "Private Endpoint is available",
+				},
+			},
+			conditionType: hyperv1.AzurePrivateEndpointAvailable,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzurePrivateEndpointAvailable),
+				Status:  metav1.ConditionTrue,
+				Reason:  hyperv1.AzurePLSSuccessReason,
+				Message: hyperv1.AllIsWellMessage,
+			},
+		},
+		{
+			name: "When AzurePrivateDNSAvailable is true it should return condition true",
+			plsConditions: []metav1.Condition{
+				{
+					Type:    string(hyperv1.AzurePrivateDNSAvailable),
+					Status:  metav1.ConditionTrue,
+					Reason:  hyperv1.AzurePLSSuccessReason,
+					Message: "Private DNS zone and A records are available",
+				},
+			},
+			conditionType: hyperv1.AzurePrivateDNSAvailable,
+			expected: metav1.Condition{
+				Type:    string(hyperv1.AzurePrivateDNSAvailable),
+				Status:  metav1.ConditionTrue,
+				Reason:  hyperv1.AzurePLSSuccessReason,
+				Message: hyperv1.AllIsWellMessage,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			azPLSList := hyperv1.AzurePrivateLinkServiceList{
+				Items: []hyperv1.AzurePrivateLinkService{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-pls",
+						},
+						Status: hyperv1.AzurePrivateLinkServiceStatus{
+							Conditions: tc.plsConditions,
+						},
+					},
+				},
+			}
+			condition := computeAzurePLSCondition(azPLSList, tc.conditionType)
+			if condition != tc.expected {
+				t.Errorf("error, expected %v\nbut got %v", tc.expected, condition)
+			}
+		})
+	}
+}
+
+func TestValidateAzureConfig(t *testing.T) {
+	testCases := []struct {
+		name        string
+		hc          *hyperv1.HostedCluster
+		expectError bool
+		errorMsg    string
+		setup       func(t *testing.T)
+	}{
+		{
+			name: "When platform is not Azure it should return nil",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AWSPlatform,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "When platform is Azure but Azure spec is nil it should return an error",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type:  hyperv1.AzurePlatform,
+						Azure: nil,
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "azurecluster needs .spec.platform.azure to be filled",
+		},
+		{
+			name: "When topology is Private without Private config it should return an error",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPrivate,
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    `spec.platform.azure.private.type: Invalid value: "": private.type is required when topology is "Private"`,
+		},
+		{
+			name: "When topology is PublicAndPrivate without Private config it should return an error",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPublicAndPrivate,
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    `spec.platform.azure.private.type: Invalid value: "": private.type is required when topology is "PublicAndPrivate"`,
+		},
+		{
+			name: "When topology is Public without Private config it should succeed",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPublic,
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "When topology is Private with PrivateLink but no NATSubnetID it should succeed",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPrivate,
+							Private: hyperv1.AzurePrivateSpec{
+								Type:        hyperv1.AzurePrivateTypePrivateLink,
+								PrivateLink: hyperv1.AzurePrivateLinkSpec{},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "When topology is Private with Private config it should succeed",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPrivate,
+							Private: hyperv1.AzurePrivateSpec{
+								Type: hyperv1.AzurePrivateTypePrivateLink,
+								PrivateLink: hyperv1.AzurePrivateLinkSpec{
+									NATSubnetID:                    "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/nat-subnet",
+									AdditionalAllowedSubscriptions: []hyperv1.AzureSubscriptionID{"sub-1"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "When ARO HCP has Private topology without Private config it should succeed",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type: hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{
+							Topology: hyperv1.AzureTopologyPrivate,
+						},
+					},
+				},
+			},
+			expectError: false,
+			setup: func(t *testing.T) {
+				azureutil.SetAsAroHCPTest(t)
+			},
+		},
+		{
+			name: "When endpointAccess is zero value it should succeed as it defaults to Public",
+			hc: &hyperv1.HostedCluster{
+				Spec: hyperv1.HostedClusterSpec{
+					Platform: hyperv1.PlatformSpec{
+						Type:  hyperv1.AzurePlatform,
+						Azure: &hyperv1.AzurePlatformSpec{},
+					},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			r := &HostedClusterReconciler{}
+			err := r.validateAzureConfig(tc.hc)
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("expected error but got nil")
+				}
+				if err.Error() != tc.errorMsg {
+					t.Errorf("expected error message %q but got %q", tc.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected no error but got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestComputeEndpointServiceCondition(t *testing.T) {
+	t.Parallel()
+	g := NewGomegaWithT(t)
+
+	const (
+		testErrorReason   = "TestError"
+		testSuccessReason = "TestSuccess"
+		testNotFoundMsg   = "test conditions not found"
+		testConditionType = "TestAvailable"
+	)
+
+	tests := []struct {
+		name               string
+		resourceConditions [][]metav1.Condition
+		conditionType      hyperv1.ConditionType
+		expected           metav1.Condition
+	}{
+		{
+			name:               "When no resource conditions exist it should return unknown",
+			resourceConditions: [][]metav1.Condition{},
+			conditionType:      testConditionType,
+			expected: metav1.Condition{
+				Type:    testConditionType,
+				Status:  metav1.ConditionUnknown,
+				Reason:  hyperv1.StatusUnknownReason,
+				Message: testNotFoundMsg,
+			},
+		},
+		{
+			name: "When no matching condition type exists it should return unknown",
+			resourceConditions: [][]metav1.Condition{
+				{
+					{
+						Type:   "OtherCondition",
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			conditionType: testConditionType,
+			expected: metav1.Condition{
+				Type:    testConditionType,
+				Status:  metav1.ConditionUnknown,
+				Reason:  hyperv1.StatusUnknownReason,
+				Message: testNotFoundMsg,
+			},
+		},
+		{
+			name: "When all conditions are true it should return true with success reason",
+			resourceConditions: [][]metav1.Condition{
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionTrue,
+						Reason:  testSuccessReason,
+						Message: hyperv1.AllIsWellMessage,
+					},
+				},
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionTrue,
+						Reason:  testSuccessReason,
+						Message: hyperv1.AllIsWellMessage,
+					},
+				},
+			},
+			conditionType: testConditionType,
+			expected: metav1.Condition{
+				Type:    testConditionType,
+				Status:  metav1.ConditionTrue,
+				Reason:  testSuccessReason,
+				Message: hyperv1.AllIsWellMessage,
+			},
+		},
+		{
+			name: "When any condition is false it should return false with aggregated messages",
+			resourceConditions: [][]metav1.Condition{
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionTrue,
+						Reason:  testSuccessReason,
+						Message: hyperv1.AllIsWellMessage,
+					},
+				},
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionFalse,
+						Reason:  testErrorReason,
+						Message: "resource 1 error",
+					},
+				},
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionFalse,
+						Reason:  testErrorReason,
+						Message: "resource 2 error",
+					},
+				},
+			},
+			conditionType: testConditionType,
+			expected: metav1.Condition{
+				Type:    testConditionType,
+				Status:  metav1.ConditionFalse,
+				Reason:  testErrorReason,
+				Message: "resource 1 error; resource 2 error",
+			},
+		},
+		{
+			name: "When a single condition is false it should return false with error reason",
+			resourceConditions: [][]metav1.Condition{
+				{
+					{
+						Type:    testConditionType,
+						Status:  metav1.ConditionFalse,
+						Reason:  testErrorReason,
+						Message: "something went wrong",
+					},
+				},
+			},
+			conditionType: testConditionType,
+			expected: metav1.Condition{
+				Type:    testConditionType,
+				Status:  metav1.ConditionFalse,
+				Reason:  testErrorReason,
+				Message: "something went wrong",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			condition := computeEndpointServiceCondition(tc.resourceConditions, tc.conditionType, testErrorReason, testSuccessReason, testNotFoundMsg)
+			g.Expect(condition).To(Equal(tc.expected))
 		})
 	}
 }

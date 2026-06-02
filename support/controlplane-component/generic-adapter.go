@@ -2,7 +2,7 @@ package controlplanecomponent
 
 import (
 	"github.com/openshift/hypershift/support/config"
-	"github.com/openshift/hypershift/support/util"
+	"github.com/openshift/hypershift/support/k8sutil"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -48,6 +48,16 @@ func (ga *genericAdapter) reconcile(cpContext ControlPlaneContext, obj client.Ob
 	workloadContext := cpContext.workloadContext()
 
 	if ga.predicate != nil && !ga.predicate(workloadContext) {
+		if cpContext.GVKAccessChecker != nil {
+			accessible, err := cpContext.GVKAccessChecker.GetOrProbe(cpContext, obj)
+			if err != nil {
+				return err
+			}
+			if !accessible {
+				return nil
+			}
+		}
+
 		// get the existing object to read its ownerRefs
 		existing := obj.DeepCopyObject().(client.Object)
 		err := cpContext.Client.Get(cpContext, client.ObjectKeyFromObject(obj), existing)
@@ -57,7 +67,7 @@ func (ga *genericAdapter) reconcile(cpContext ControlPlaneContext, obj client.Ob
 			ownerRefHCP := config.OwnerRefFrom(cpContext.HCP)
 			if capiutil.HasOwnerRef(objOwnerRefs, *ownerRefHCP.Reference) {
 				// delete the object only if it has HCP ownerRef
-				_, err := util.DeleteIfNeeded(cpContext, cpContext.Client, obj)
+				_, err := k8sutil.DeleteIfNeeded(cpContext, cpContext.Client, obj)
 				return err
 			}
 			return nil

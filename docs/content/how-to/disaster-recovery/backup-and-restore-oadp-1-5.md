@@ -11,32 +11,7 @@ This guide outlines the steps for performing disaster recovery on a Hosted Clust
 
 ## Pre-requisites
 
-Ensure the following prerequisites are met on the Management cluster (connected or disconnected):
-
-- A valid StorageClass.
-- Cluster-admin access.
-- Access to the openshift-adp version 1.5+ subscription via a CatalogSource.
-- Access to online storage compatible with OpenShift ADP cloud storage providers (e.g., S3, Azure, GCP, MinIO).
-- HostedControlPlane pods are accessible and functioning correctly.
-- The HostedCluster should be PublicAndPrivate or Private.
-- The Public only clusters should have at least a hostname.
-
-!!! warning "⚠️ HostedCluster Configuration"
-
-    The HostedCluster must be configured as `PublicAndPrivate` or `Private`. Public clusters without a hostname will cause restore failures. See [HostedCluster Configuration Requirements](#hostedcluster-configuration-requirements) for details.
-
-!!! Note "Note for Bare Metal Providers"
-
-    Since the InfraEnv has a different lifecycle than the HostedCluster, it should reside in a separate namespace from the HostedControlPlane and must not be deleted during backup or restore procedures.
-
-
-!!! important
-
-    Before proceeding further, two crucial points must be noted:
-
-    1. Restoration will occur in a green field environment, signifying that after the HostedCluster has been backed up, it must be destroyed to initiate the restoration process.
-
-    2. Node reprovisioning will take place, necessitating the backup of workloads in the Data Plane before deleting the HostedCluster..
+Please review the [Disaster Recovery Prerequisites](prerequisites.md) page before proceeding. It covers all general requirements, HostedCluster service publishing strategy configuration (critical for cross-management-cluster restore), and platform-specific considerations.
 
 ## Deploying OpenShift ADP
 
@@ -897,46 +872,4 @@ velero delete backup hc-clusters-hosted-backup
 
 ## HostedCluster Configuration Requirements
 
-The HostedCluster must be configured as `PublicAndPrivate` or `Private` for backup/restore operations to work correctly. If the HostedCluster is configured as Public (without a hostname in the ServicePublishingStrategy for the kube-api-server), the restore operation will fail with the following consequences:
-
-- **Nodes remain in NotReady state**
-- **NodePool scaling fails to generate new nodes**
-
-### Root Cause
-
-The issue occurs because:
-
-- Nodes store the ELB (Elastic Load Balancer) address in their kubelet configuration, which is ephemeral and changes when the cluster is deleted and restored
-- The SAN (Subject Alternative Name) in the certificate fails because the certificate name no longer matches the new ELB
-- Original nodes cannot connect to the ControlPlane because they point to the old ELB, and even if they pointed to the new one, the certificate would be incorrect
-
-### Solution
-
-Ensure your HostedCluster is configured with either:
-
-- `PublicAndPrivate` service publishing strategy, OR
-- `Private` service publishing strategy, OR
-- `Public` service publishing strategy with a **hostname** specified for the kube-api-server
-
-### Example Configuration
-
-**Option 1: PublicAndPrivate or Private**
-```yaml
-spec:
-  platform:
-    aws:
-      servicePublishingStrategy:
-        kubeAPIServer:
-          type: PublicAndPrivate  # or Private
-```
-
-**Option 2: Public with hostname**
-```yaml
-spec:
-  platform:
-    aws:
-      servicePublishingStrategy:
-        kubeAPIServer:
-          type: Public
-          hostname: "api.your-cluster.example.com"
-```
+For detailed information about HostedCluster service publishing strategy requirements, including example configurations and platform-specific considerations, see the [Disaster Recovery Prerequisites](prerequisites.md#hostedcluster-service-publishing-strategy-requirements) page.

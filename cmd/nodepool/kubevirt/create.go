@@ -91,7 +91,9 @@ type ValidatedKubevirtPlatformCreateOptions struct {
 	*validatedKubevirtPlatformCreateOptions
 }
 
-func (o *RawKubevirtPlatformCreateOptions) Validate() (*ValidatedKubevirtPlatformCreateOptions, error) {
+// Validate validates the KubeVirt nodepool platform options.
+// This method uses the unified signature pattern defined in core.NodePoolPlatformValidator.
+func (o *RawKubevirtPlatformCreateOptions) Validate(_ context.Context, _ *core.CreateNodePoolOptions) (core.NodePoolPlatformCompleter, error) {
 	if o.CacheStrategyType != "" &&
 		o.CacheStrategyType != string(hyperv1.KubevirtCachingStrategyNone) &&
 		o.CacheStrategyType != string(hyperv1.KubevirtCachingStrategyPVC) {
@@ -111,6 +113,12 @@ func (o *RawKubevirtPlatformCreateOptions) Validate() (*ValidatedKubevirtPlatfor
 
 	if o.RootVolumeSize < 16 {
 		return nil, fmt.Errorf("the root volume size [%d] must be greater than or equal to 16", o.RootVolumeSize)
+	}
+
+	if o.Memory != "" {
+		if _, err := apiresource.ParseQuantity(o.Memory); err != nil {
+			return nil, fmt.Errorf("invalid memory quantity %q: %w", o.Memory, err)
+		}
 	}
 
 	if len(o.AdditionalNetworks) == 0 && o.AttachDefaultNetwork != nil && !*o.AttachDefaultNetwork {
@@ -133,8 +141,8 @@ type HostDevicesOpts struct {
 	Count int    `param:"count"`
 }
 
-// completedCreateOptions is a private wrapper that enforces a call of Complete() before nodepool creation can be invoked.
-type completetedKubevirtPlatformCreateOptions struct {
+// completedKubevirtPlatformCreateOptions is a private wrapper that enforces a call of Complete() before nodepool creation can be invoked.
+type completedKubevirtPlatformCreateOptions struct {
 	*KubevirtPlatformOptions
 
 	MultiQueue          *hyperv1.MultiQueueSetting
@@ -143,12 +151,14 @@ type completetedKubevirtPlatformCreateOptions struct {
 	KubevirtHostDevices []hyperv1.KubevirtHostDevice
 }
 
-type KubevirtPlatformCreateOptions struct {
+type CompletedKubevirtPlatformCreateOptions struct {
 	// Embed a private pointer that cannot be instantiated outside of this package.
-	*completetedKubevirtPlatformCreateOptions
+	*completedKubevirtPlatformCreateOptions
 }
 
-func (o *ValidatedKubevirtPlatformCreateOptions) Complete() (*KubevirtPlatformCreateOptions, error) {
+// Complete completes the KubeVirt nodepool platform options.
+// This method uses the unified signature pattern defined in core.NodePoolPlatformCompleter.
+func (o *ValidatedKubevirtPlatformCreateOptions) Complete(_ context.Context, _ *core.CreateNodePoolOptions) (core.PlatformOptions, error) {
 	var multiQueue *hyperv1.MultiQueueSetting
 	switch value := hyperv1.MultiQueueSetting(o.NetworkInterfaceMultiQueue); value {
 	case "": // do nothing; value is nil
@@ -209,8 +219,8 @@ func (o *ValidatedKubevirtPlatformCreateOptions) Complete() (*KubevirtPlatformCr
 		hostDevices = append(hostDevices, kubevirtHostDevice)
 	}
 
-	return &KubevirtPlatformCreateOptions{
-		completetedKubevirtPlatformCreateOptions: &completetedKubevirtPlatformCreateOptions{
+	return &CompletedKubevirtPlatformCreateOptions{
+		completedKubevirtPlatformCreateOptions: &completedKubevirtPlatformCreateOptions{
 			KubevirtPlatformOptions: o.KubevirtPlatformOptions,
 			MultiQueue:              multiQueue,
 			QoSClass:                qosClass,
@@ -229,12 +239,13 @@ func NewCreateCommand(coreOpts *core.CreateNodePoolOptions) *cobra.Command {
 	}
 	BindDeveloperOptions(platformOpts, cmd.Flags())
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		validOpts, err := platformOpts.Validate()
+		ctx := cmd.Context()
+		validOpts, err := platformOpts.Validate(ctx, coreOpts)
 		if err != nil {
 			return err
 		}
 
-		opts, err := validOpts.Complete()
+		opts, err := validOpts.Complete(ctx, coreOpts)
 		if err != nil {
 			return err
 		}
@@ -244,16 +255,16 @@ func NewCreateCommand(coreOpts *core.CreateNodePoolOptions) *cobra.Command {
 	return cmd
 }
 
-func (o *KubevirtPlatformCreateOptions) UpdateNodePool(_ context.Context, nodePool *hyperv1.NodePool, _ *hyperv1.HostedCluster, _ crclient.Client) error {
+func (o *CompletedKubevirtPlatformCreateOptions) UpdateNodePool(_ context.Context, nodePool *hyperv1.NodePool, _ *hyperv1.HostedCluster, _ crclient.Client) error {
 	nodePool.Spec.Platform.Kubevirt = o.NodePoolPlatform()
 	return nil
 }
 
-func (o *KubevirtPlatformCreateOptions) Type() hyperv1.PlatformType {
+func (o *CompletedKubevirtPlatformCreateOptions) Type() hyperv1.PlatformType {
 	return hyperv1.KubevirtPlatform
 }
 
-func (o *KubevirtPlatformCreateOptions) NodePoolPlatform() *hyperv1.KubevirtNodePoolPlatform {
+func (o *CompletedKubevirtPlatformCreateOptions) NodePoolPlatform() *hyperv1.KubevirtNodePoolPlatform {
 	var storageClassName *string
 	var accessModesStr []string
 	var accessModes []hyperv1.PersistentVolumeAccessMode
@@ -292,8 +303,7 @@ func (o *KubevirtPlatformCreateOptions) NodePoolPlatform() *hyperv1.KubevirtNode
 	}
 
 	if o.Memory != "" {
-		// TODO: add a debug trace for this error
-		memory, _ := apiresource.ParseQuantity(o.Memory)
+		memory := apiresource.MustParse(o.Memory)
 		platform.Compute.Memory = &memory
 	}
 	if o.Cores != 0 {

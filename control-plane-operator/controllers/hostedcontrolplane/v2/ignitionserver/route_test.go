@@ -7,7 +7,7 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	component "github.com/openshift/hypershift/support/controlplane-component"
-	"github.com/openshift/hypershift/support/util"
+	"github.com/openshift/hypershift/support/netutil"
 
 	routev1 "github.com/openshift/api/route/v1"
 
@@ -20,6 +20,7 @@ func TestIgnitionRouteAdapt(t *testing.T) {
 		hcp                 *hyperv1.HostedControlPlane
 		route               *routev1.Route
 		expectedHost        string
+		expectHCPRouteLabel bool
 		expectInternalLabel bool
 	}{
 		{
@@ -44,6 +45,7 @@ func TestIgnitionRouteAdapt(t *testing.T) {
 				},
 			},
 			expectedHost:        "ignition-server.apps.test-hcp.hypershift.local",
+			expectHCPRouteLabel: true,
 			expectInternalLabel: true,
 		},
 		{
@@ -79,6 +81,7 @@ func TestIgnitionRouteAdapt(t *testing.T) {
 				},
 			},
 			expectedHost:        "ignition.example.com",
+			expectHCPRouteLabel: false,
 			expectInternalLabel: false,
 		},
 	}
@@ -92,12 +95,17 @@ func TestIgnitionRouteAdapt(t *testing.T) {
 			err := ign.adaptRoute(cpContext, tc.route)
 			g.Expect(err).To(BeNil())
 			g.Expect(tc.route.Spec.Host).To(Equal(tc.expectedHost))
-			g.Expect(tc.route.Labels).To(HaveKeyWithValue(util.HCPRouteLabel, tc.route.Namespace))
+
+			if tc.expectHCPRouteLabel {
+				g.Expect(tc.route.Labels).To(HaveKeyWithValue(netutil.HCPRouteLabel, tc.route.Namespace))
+			} else {
+				g.Expect(tc.route.Labels).ToNot(HaveKeyWithValue(netutil.HCPRouteLabel, tc.route.Namespace))
+			}
 
 			if tc.expectInternalLabel {
-				g.Expect(tc.route.Labels).To(HaveKeyWithValue(util.InternalRouteLabel, "true"))
+				g.Expect(tc.route.Labels).To(HaveKeyWithValue(netutil.InternalRouteLabel, "true"))
 			} else {
-				g.Expect(tc.route.Labels).ToNot(HaveKey(util.InternalRouteLabel))
+				g.Expect(tc.route.Labels).ToNot(HaveKey(netutil.InternalRouteLabel))
 			}
 		})
 	}

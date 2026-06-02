@@ -30,7 +30,7 @@ import (
 	"time"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	hyperkarpenterv1 "github.com/openshift/hypershift/api/karpenter/v1beta1"
+	hyperkarpenterv1 "github.com/openshift/hypershift/api/karpenter/v1"
 	"github.com/openshift/hypershift/api/util/configrefs"
 	"github.com/openshift/hypershift/cmd/util"
 	"github.com/openshift/hypershift/control-plane-operator/controllers/hostedcontrolplane/imageprovider"
@@ -59,10 +59,14 @@ import (
 	"github.com/openshift/hypershift/support/certs"
 	"github.com/openshift/hypershift/support/config"
 	controlplanecomponent "github.com/openshift/hypershift/support/controlplane-component"
+	"github.com/openshift/hypershift/support/gcpapi"
 	"github.com/openshift/hypershift/support/globalconfig"
 	"github.com/openshift/hypershift/support/infraid"
+	"github.com/openshift/hypershift/support/k8sutil"
 	"github.com/openshift/hypershift/support/metrics"
+	"github.com/openshift/hypershift/support/netutil"
 	"github.com/openshift/hypershift/support/oidc"
+	"github.com/openshift/hypershift/support/podspec"
 	"github.com/openshift/hypershift/support/releaseinfo"
 	"github.com/openshift/hypershift/support/secretproviderclass"
 	"github.com/openshift/hypershift/support/supportedversion"
@@ -183,6 +187,9 @@ type HostedClusterReconciler struct {
 	OIDCStorageProviderS3BucketName string
 	S3Client                        awsapi.S3API
 
+	GCPOIDCStorageBucketName string
+	GCSClient                gcpapi.GCSAPI
+
 	MetricsSet    metrics.MetricsSet
 	SREConfigHash string
 
@@ -264,21 +271,21 @@ func (r *HostedClusterReconciler) managedResources() []client.Object {
 
 	// Watch based on platforms installed
 	if platformsInstalled := os.Getenv("PLATFORMS_INSTALLED"); len(platformsInstalled) > 0 {
-		managedResources = append(managedResources, hyperutil.GetHostedClusterManagedResources(platformsInstalled)...)
+		managedResources = append(managedResources, k8sutil.GetHostedClusterManagedResources(platformsInstalled)...)
 	} else {
-		managedResources = append(managedResources, hyperutil.BaseResources...)
-		managedResources = append(managedResources, hyperutil.AWSResources...)
-		managedResources = append(managedResources, hyperutil.AzureResources...)
-		managedResources = append(managedResources, hyperutil.IBMCloudResources...)
-		managedResources = append(managedResources, hyperutil.KubevirtResources...)
-		managedResources = append(managedResources, hyperutil.AgentResources...)
-		managedResources = append(managedResources, hyperutil.OpenStackResources...)
+		managedResources = append(managedResources, k8sutil.BaseResources...)
+		managedResources = append(managedResources, k8sutil.AWSResources...)
+		managedResources = append(managedResources, k8sutil.AzureResources...)
+		managedResources = append(managedResources, k8sutil.IBMCloudResources...)
+		managedResources = append(managedResources, k8sutil.KubevirtResources...)
+		managedResources = append(managedResources, k8sutil.AgentResources...)
+		managedResources = append(managedResources, k8sutil.OpenStackResources...)
 	}
 
 	// Only watch managed Azure resources if the HO is explicitly configured to do so. Otherwise, the HO will fail to
 	// reconcile HostedClusters since some CRs are only installed in the managed Azure use case.
 	if azureutil.IsAroHCP() {
-		managedResources = append(managedResources, hyperutil.ManagedAzure...)
+		managedResources = append(managedResources, k8sutil.ManagedAzure...)
 	}
 
 	// Watch if etcd recovery is enabled
@@ -336,7 +343,6 @@ func pauseHostedControlPlane(ctx context.Context, c client.Client, hcp *hyperv1.
 
 func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("reconciling")
 
 	// Look up the HostedCluster instance to reconcile
 	hcluster := &hyperv1.HostedCluster{}
@@ -380,6 +386,7 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return res, err
 }
 
+//nolint:gocyclo
 func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Request, log logr.Logger, hcluster *hyperv1.HostedCluster) (ctrl.Result, error) {
 	controlPlaneNamespace := manifests.HostedControlPlaneNamespaceObject(hcluster.Namespace, hcluster.Name)
 	hcp := controlplaneoperator.HostedControlPlane(controlPlaneNamespace.Name, hcluster.Name)
@@ -423,69 +430,11 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	// Bubble up AWSDefaultSecurityGroupDeleted condition from the hostedControlPlane.
-	// We set this condition even if the HC is being deleted, so we can report blocking objects on deletion.
-	{
-		if hcp != nil && !hcp.DeletionTimestamp.IsZero() {
-			freshCondition := &metav1.Condition{
-				Type:               string(hyperv1.AWSDefaultSecurityGroupDeleted),
-				Status:             metav1.ConditionUnknown,
-				Reason:             hyperv1.StatusUnknownReason,
-				ObservedGeneration: hcluster.Generation,
-			}
-
-			securityGroupDeletionCondition := meta.FindStatusCondition(hcp.Status.Conditions, string(hyperv1.AWSDefaultSecurityGroupDeleted))
-			if securityGroupDeletionCondition != nil {
-				freshCondition = securityGroupDeletionCondition
-			}
-
-			oldCondition := meta.FindStatusCondition(hcluster.Status.Conditions, string(hyperv1.AWSDefaultSecurityGroupDeleted))
-			if oldCondition == nil || oldCondition.Message != freshCondition.Message {
-				freshCondition.ObservedGeneration = hcluster.Generation
-				meta.SetStatusCondition(&hcluster.Status.Conditions, *freshCondition)
-				// Persist status updates
-				if err := r.Client.Status().Update(ctx, hcluster); err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
-				}
-			}
-
-			// Remove any referenced resource annotations for this hosted cluster from secrets and configmaps
-			deleteReferencedResourceAnnotation := func(obj client.Object) error {
-				annotations := obj.GetAnnotations()
-				if annotations == nil {
-					return nil
-				}
-				key := referencedResourceAnnotationPrefix + hcluster.Name
-				if _, ok := annotations[key]; !ok {
-					return nil
-				}
-				delete(annotations, key)
-				obj.SetAnnotations(annotations)
-				if err := r.Update(ctx, obj); err != nil {
-					return err
-				}
-				return nil
-			}
-
-			var secretList corev1.SecretList
-			if err := r.List(ctx, &secretList, client.InNamespace(hcluster.Namespace)); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to list secrets: %w", err)
-			}
-			for _, secret := range secretList.Items {
-				if err := deleteReferencedResourceAnnotation(&secret); err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to delete referenced resource annotation on secret: %w", err)
-				}
-			}
-
-			var configmapList corev1.ConfigMapList
-			if err := r.List(ctx, &configmapList, client.InNamespace(hcluster.Namespace)); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to list configmaps: %w", err)
-			}
-			for _, configmap := range configmapList.Items {
-				if err := deleteReferencedResourceAnnotation(&configmap); err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to delete referenced resource annotation on configmap: %w", err)
-				}
-			}
+	// Bubble up AWSDefaultSecurityGroupDeleted condition from the hostedControlPlane to report blocking objects on deletion.
+	if condition, changed := computeAWSDefaultSGDeletedCondition(hcluster, hcp); changed {
+		meta.SetStatusCondition(&hcluster.Status.Conditions, *condition)
+		if err := r.Client.Status().Update(ctx, hcluster); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
@@ -567,6 +516,44 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		if len(crbs.Items) > 0 {
 			if err := r.DeleteAllOf(ctx, &rbacv1.ClusterRoleBinding{}, selector); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to delete cluster role bindings: %w", err)
+			}
+		}
+
+		// Remove any referenced resource annotations for this hosted cluster from secrets and configmaps
+		deleteReferencedResourceAnnotation := func(obj client.Object) error {
+			annotations := obj.GetAnnotations()
+			if annotations == nil {
+				return nil
+			}
+			key := referencedResourceAnnotationPrefix + hcluster.Name
+			if _, ok := annotations[key]; !ok {
+				return nil
+			}
+			delete(annotations, key)
+			obj.SetAnnotations(annotations)
+			if err := r.Update(ctx, obj); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		var secretList corev1.SecretList
+		if err := r.List(ctx, &secretList, client.InNamespace(hcluster.Namespace)); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to list secrets: %w", err)
+		}
+		for _, secret := range secretList.Items {
+			if err := deleteReferencedResourceAnnotation(&secret); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete referenced resource annotation on secret: %w", err)
+			}
+		}
+
+		var configmapList corev1.ConfigMapList
+		if err := r.List(ctx, &configmapList, client.InNamespace(hcluster.Namespace)); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to list configmaps: %w", err)
+		}
+		for _, configmap := range configmapList.Items {
+			if err := deleteReferencedResourceAnnotation(&configmap); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete referenced resource annotation on configmap: %w", err)
 			}
 		}
 
@@ -829,6 +816,8 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 			hyperv1.ValidIDPConfiguration,
 			hyperv1.HostedClusterRestoredFromBackup,
 			hyperv1.DataPlaneConnectionAvailable,
+			hyperv1.ControlPlaneConnectionAvailable,
+			hyperv1.EtcdBackupSucceeded,
 		}
 
 		for _, conditionType := range hcpConditions {
@@ -855,7 +844,15 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	// Copy the platform status from the hostedcontrolplane
 	if hcp != nil {
 		hcluster.Status.Platform = hcp.Status.Platform
+		hcluster.Status.AutoNode = hcp.Status.AutoNode
 	}
+
+	// Copy the control plane version status from the hostedcontrolplane
+	propagateControlPlaneVersion(hcluster, hcp)
+
+	// Set the AutoNodeEnabled condition reflecting both spec intent and actual component rollout progress.
+	meta.SetStatusCondition(&hcluster.Status.Conditions,
+		r.reconcileAutoNodeEnabledCondition(ctx, hcluster, controlPlaneNamespace.Name))
 
 	// Copy the AWSDefaultSecurityGroupCreated condition from the hostedcontrolplane
 	if hcluster.Spec.Platform.Type == hyperv1.AWSPlatform {
@@ -965,6 +962,28 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			meta.SetStatusCondition(&hcluster.Status.Conditions, computeGCPPSCCondition(gcpPSCList, hyperv1.GCPEndpointAvailable))
 			meta.SetStatusCondition(&hcluster.Status.Conditions, computeGCPPSCCondition(gcpPSCList, hyperv1.GCPServiceAttachmentAvailable))
+		}
+	}
+
+	// Copy Azure Private Link conditions from the AzurePrivateLinkService resources.
+	// ARO HCP uses Swift networking, not Private Link Services.
+	if hcluster.Spec.Platform.Type == hyperv1.AzurePlatform && !azureutil.IsAroHCP() {
+		hcpNamespace := manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name)
+		var azPLSList hyperv1.AzurePrivateLinkServiceList
+		if err := r.List(ctx, &azPLSList, &client.ListOptions{Namespace: hcpNamespace}); err != nil {
+			condition := metav1.Condition{
+				Type:    string(hyperv1.AzurePrivateLinkServiceAvailable),
+				Status:  metav1.ConditionUnknown,
+				Reason:  hyperv1.NotFoundReason,
+				Message: fmt.Sprintf("error listing AzurePrivateLinkService in namespace %s: %v", hcpNamespace, err),
+			}
+			meta.SetStatusCondition(&hcluster.Status.Conditions, condition)
+		} else if len(azPLSList.Items) > 0 {
+			meta.SetStatusCondition(&hcluster.Status.Conditions, computeAzurePLSCondition(azPLSList, hyperv1.AzurePrivateLinkServiceAvailable))
+			meta.SetStatusCondition(&hcluster.Status.Conditions, computeAzurePLSCondition(azPLSList, hyperv1.AzurePLSCreated))
+			meta.SetStatusCondition(&hcluster.Status.Conditions, computeAzurePLSCondition(azPLSList, hyperv1.AzureInternalLoadBalancerAvailable))
+			meta.SetStatusCondition(&hcluster.Status.Conditions, computeAzurePLSCondition(azPLSList, hyperv1.AzurePrivateEndpointAvailable))
+			meta.SetStatusCondition(&hcluster.Status.Conditions, computeAzurePLSCondition(azPLSList, hyperv1.AzurePrivateDNSAvailable))
 		}
 	}
 
@@ -1868,41 +1887,12 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	if cpoSupportsKASCustomKubeconfig {
 		// Reconcile the HostedControlPlane external kubeconfig if one is reported
 		if len(hcp.Spec.KubeAPIServerDNSName) > 0 {
-			if hcp.Status.CustomKubeconfig != nil {
-				src := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: hcp.Namespace,
-						Name:      hcp.Status.CustomKubeconfig.Name,
-					},
-				}
-				err := r.Client.Get(ctx, client.ObjectKeyFromObject(src), src)
-				if err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to get controlplane custom external kubeconfig secret %q: %w", client.ObjectKeyFromObject(src), err)
-				}
-				dest := manifests.KubeConfigExternalSecret(hcluster.Namespace, hcluster.Name)
-				_, err = createOrUpdate(ctx, r.Client, dest, func() error {
-					key := hcp.Status.CustomKubeconfig.Key
-					srcData, srcHasData := src.Data[key]
-					if !srcHasData {
-						return fmt.Errorf("controlplane custom external kubeconfig secret %q must have a %q key", client.ObjectKeyFromObject(src), key)
-					}
-					dest.Labels = hcluster.Labels
-					dest.Type = corev1.SecretTypeOpaque
-					if dest.Data == nil {
-						dest.Data = map[string][]byte{}
-					}
-					dest.Data["kubeconfig"] = srcData
-					dest.SetOwnerReferences([]metav1.OwnerReference{{
-						APIVersion: hyperv1.GroupVersion.String(),
-						Kind:       "HostedCluster",
-						Name:       hcluster.Name,
-						UID:        hcluster.UID,
-					}})
-					return nil
-				})
-				if err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to reconcile hostedcluster custom external kubeconfig secret: %w", err)
-				}
+			requeue, err := r.reconcileCustomExternalKubeconfig(ctx, createOrUpdate, hcp, hcluster)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if requeue != nil {
+				requeueAfter = requeue
 			}
 		} else {
 			// Delete the custom external kubeconfig secret if it exists and the external name is not set
@@ -1913,7 +1903,7 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 						Name:      hcluster.Status.CustomKubeconfig.Name,
 					},
 				}
-				if _, err := hyperutil.DeleteIfNeeded(ctx, r.Client, customKubeconfig); err != nil {
+				if _, err := k8sutil.DeleteIfNeeded(ctx, r.Client, customKubeconfig); err != nil {
 					return ctrl.Result{}, fmt.Errorf("failed to delete custom external kubeconfig secret %q: %w", client.ObjectKeyFromObject(customKubeconfig), err)
 				}
 				hcluster.Status.CustomKubeconfig = nil
@@ -1981,7 +1971,7 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 
 	imageProvider := imageprovider.New(releaseImage)
 	imageProvider.ComponentImages()["token-minter"] = utilitiesImage
-	imageProvider.ComponentImages()[hyperutil.AvailabilityProberImageName] = utilitiesImage
+	imageProvider.ComponentImages()[podspec.AvailabilityProberImageName] = utilitiesImage
 
 	securityContextUID := controlplanecomponent.DefaultSecurityContextUID
 	if r.SetDefaultSecurityContext {
@@ -2036,34 +2026,23 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 	// Reconcile platform specific items
 	switch hcluster.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
+		if hcluster.Spec.Platform.Kubevirt != nil && hcluster.Spec.Platform.Kubevirt.Credentials != nil {
+			if err := r.Client.Status().Update(ctx, hcluster); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to update status after network policy RBAC check: %w", err)
+			}
+		}
 		err = r.reconcileKubevirtCSIClusterRBAC(ctx, createOrUpdate, hcluster)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to reconcile kubevirt CSI cluster wide RBAC: %w", err)
 		}
 	case hyperv1.AWSPlatform:
-		// Reconcile the AWS OIDC discovery
-		if err := r.reconcileAWSOIDCDocuments(ctx, log, hcluster, hcp); err != nil {
-			meta.SetStatusCondition(&hcluster.Status.Conditions, metav1.Condition{
-				Type:               string(hyperv1.ValidOIDCConfiguration),
-				Status:             metav1.ConditionFalse,
-				Reason:             hyperv1.OIDCConfigurationInvalidReason,
-				ObservedGeneration: hcluster.Generation,
-				Message:            err.Error(),
-			})
-			if statusErr := r.Client.Status().Update(ctx, hcluster); statusErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to reconcile AWS OIDC documents: %s, failed to update status: %w", err, statusErr)
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to reconcile the AWS OIDC documents: %w", err)
-		}
-		meta.SetStatusCondition(&hcluster.Status.Conditions, metav1.Condition{
-			Type:               string(hyperv1.ValidOIDCConfiguration),
-			Status:             metav1.ConditionTrue,
-			Reason:             hyperv1.AsExpectedReason,
-			ObservedGeneration: hcluster.Generation,
-			Message:            "OIDC configuration is valid",
-		})
-		if err := r.Client.Status().Update(ctx, hcluster); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
+		if err := r.reconcileOIDCDocumentsWithStatus(ctx, hcluster, func() error {
+			return r.reconcileAWSOIDCDocuments(ctx, log, hcluster, hcp)
+		}); err != nil {
+			return ctrl.Result{}, err
 		}
 	case hyperv1.AzurePlatform:
 		if azureutil.IsAroHCP() {
@@ -2098,9 +2077,15 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 				}
 			}
 		}
+	case hyperv1.GCPPlatform:
+		if err := r.reconcileOIDCDocumentsWithStatus(ctx, hcluster, func() error {
+			return r.reconcileGCPOIDCDocuments(ctx, log, hcluster, hcp)
+		}); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
-	if err := r.reconcileKarpenterOperator(cpContext, createOrUpdate, hcluster, r.HypershiftOperatorImage, controlPlaneOperatorImage); err != nil {
+	if err := r.reconcileKarpenterOperator(cpContext, hcluster, r.HypershiftOperatorImage, controlPlaneOperatorImage); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile karpenter operator: %w", err)
 	}
 
@@ -2110,6 +2095,62 @@ func (r *HostedClusterReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		result.RequeueAfter = *requeueAfter
 	}
 	return result, nil
+}
+
+// reconcileCustomExternalKubeconfig copies the custom kubeconfig secret from the
+// HCP namespace to the HostedCluster namespace. It returns a requeue duration if
+// the source secret does not exist yet (e.g. during initial provisioning).
+func (r *HostedClusterReconciler) reconcileCustomExternalKubeconfig(ctx context.Context, createOrUpdate upsert.CreateOrUpdateFN, hcp *hyperv1.HostedControlPlane, hcluster *hyperv1.HostedCluster) (*time.Duration, error) {
+	if hcp.Status.CustomKubeconfig == nil {
+		return nil, nil
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+	src := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: hcp.Namespace,
+			Name:      hcp.Status.CustomKubeconfig.Name,
+		},
+	}
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(src), src); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get controlplane custom external kubeconfig secret %q: %w", client.ObjectKeyFromObject(src), err)
+		}
+		// The CPO has advertised the secret name in status but the secret
+		// does not exist yet (e.g. during initial provisioning or retarget).
+		// Continue reconciliation so downstream steps like CPO deployment
+		// updates are not blocked. Requeue to retry the copy once the
+		// secret is created.
+		log.Info("custom external kubeconfig secret not found yet, will retry", "secret", client.ObjectKeyFromObject(src))
+		requeue := 30 * time.Second
+		return &requeue, nil
+	}
+
+	dest := manifests.KubeConfigExternalSecret(hcluster.Namespace, hcluster.Name)
+	_, err := createOrUpdate(ctx, r.Client, dest, func() error {
+		key := hcp.Status.CustomKubeconfig.Key
+		srcData, srcHasData := src.Data[key]
+		if !srcHasData {
+			return fmt.Errorf("controlplane custom external kubeconfig secret %q must have a %q key", client.ObjectKeyFromObject(src), key)
+		}
+		dest.Labels = hcluster.Labels
+		dest.Type = corev1.SecretTypeOpaque
+		if dest.Data == nil {
+			dest.Data = map[string][]byte{}
+		}
+		dest.Data["kubeconfig"] = srcData
+		dest.SetOwnerReferences([]metav1.OwnerReference{{
+			APIVersion: hyperv1.GroupVersion.String(),
+			Kind:       "HostedCluster",
+			Name:       hcluster.Name,
+			UID:        hcluster.UID,
+		}})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconcile hostedcluster custom external kubeconfig secret: %w", err)
+	}
+	return nil, nil
 }
 
 const (
@@ -2245,7 +2286,7 @@ func reconcileHostedControlPlaneAnnotations(hcp *hyperv1.HostedControlPlane, hcl
 		hcp.Annotations = map[string]string{}
 	}
 
-	hcp.Annotations[hyperutil.HostedClusterAnnotation] = client.ObjectKeyFromObject(hcluster).String()
+	hcp.Annotations[k8sutil.HostedClusterAnnotation] = client.ObjectKeyFromObject(hcluster).String()
 
 	// These annotations are copied from the HostedCluster
 	mirroredAnnotations := []string{
@@ -2257,7 +2298,7 @@ func reconcileHostedControlPlaneAnnotations(hcp *hyperv1.HostedControlPlane, hcl
 		hyperv1.IBMCloudKMSProviderImage,
 		hyperv1.AWSKMSProviderImage,
 		hyperv1.PortierisImageAnnotation,
-		hyperutil.DebugDeploymentsAnnotation,
+		k8sutil.DebugDeploymentsAnnotation,
 		hyperv1.DisableProfilingAnnotation,
 		hyperv1.PrivateIngressControllerAnnotation,
 		hyperv1.IngressControllerLoadBalancerScope,
@@ -2296,6 +2337,7 @@ func reconcileHostedControlPlaneAnnotations(hcp *hyperv1.HostedControlPlane, hcl
 		// TODO: Remove this once the the input is in the HostedCluster AWS API.
 		"hypershift.openshift.io/aws-termination-handler-queue-url",
 		hyperv1.SwiftPodNetworkInstanceAnnotation,
+		hyperv1.EnableMetricsForwarding,
 	}
 	for _, key := range mirroredAnnotations {
 		val, hasVal := hcluster.Annotations[key]
@@ -2543,7 +2585,7 @@ func (r *HostedClusterReconciler) reconcileCAPIProvider(cpContext controlplaneco
 	}
 	if err == nil {
 		if capiProviderDeployment.Spec.Template.ObjectMeta.Labels[hyperv1.ControlPlaneComponentLabel] != "capi-provider" {
-			_, err = hyperutil.DeleteIfNeeded(cpContext, cpContext.Client, capiProviderDeployment)
+			_, err = k8sutil.DeleteIfNeeded(cpContext, cpContext.Client, capiProviderDeployment)
 			// Always return an error so we can retry when the cache is updated
 			return fmt.Errorf("provider with outdated labels exists, delete result: %w", err)
 		}
@@ -2874,7 +2916,7 @@ func reconcileCAPICluster(cluster *capiv1.Cluster, hcluster *hyperv1.HostedClust
 	}
 
 	cluster.Annotations = map[string]string{
-		hyperutil.HostedClusterAnnotation: client.ObjectKeyFromObject(hcluster).String(),
+		k8sutil.HostedClusterAnnotation: client.ObjectKeyFromObject(hcluster).String(),
 	}
 	cluster.Spec = capiv1.ClusterSpec{
 		ControlPlaneEndpoint: capiv1.APIEndpoint{},
@@ -3113,6 +3155,31 @@ func computeUnmanagedEtcdAvailability(hcluster *hyperv1.HostedCluster, unmanaged
 	}
 }
 
+func computeAWSDefaultSGDeletedCondition(hcluster *hyperv1.HostedCluster, hcp *hyperv1.HostedControlPlane) (*metav1.Condition, bool) {
+	if hcluster.Spec.Platform.Type != hyperv1.AWSPlatform || hcp == nil || hcp.DeletionTimestamp.IsZero() {
+		return nil, false
+	}
+
+	freshCondition := &metav1.Condition{
+		Type:               string(hyperv1.AWSDefaultSecurityGroupDeleted),
+		Status:             metav1.ConditionUnknown,
+		Reason:             hyperv1.StatusUnknownReason,
+		ObservedGeneration: hcluster.Generation,
+	}
+
+	if sgCondition := meta.FindStatusCondition(hcp.Status.Conditions, string(hyperv1.AWSDefaultSecurityGroupDeleted)); sgCondition != nil {
+		freshCondition = sgCondition
+	}
+
+	oldCondition := meta.FindStatusCondition(hcluster.Status.Conditions, string(hyperv1.AWSDefaultSecurityGroupDeleted))
+	if oldCondition != nil && oldCondition.Message == freshCondition.Message {
+		return nil, false
+	}
+
+	freshCondition.ObservedGeneration = hcluster.Generation
+	return freshCondition, true
+}
+
 func computeAWSEndpointServiceCondition(awsEndpointServiceList hyperv1.AWSEndpointServiceList, conditionType hyperv1.ConditionType) metav1.Condition {
 	var messages []string
 	var conditions []metav1.Condition
@@ -3228,7 +3295,7 @@ func deleteAWSEndpointServices(ctx context.Context, c client.Client, hc *hyperv1
 
 // deleteGCPPrivateServiceConnect loops over GCPPrivateServiceConnectList items and sends a delete request for each.
 // It returns true if len(gcpPrivateServiceConnectList.Items) != 0.
-func deleteGCPPrivateServiceConnect(ctx context.Context, c client.Client, hc *hyperv1.HostedCluster, namespace string) (bool, error) {
+func deleteGCPPrivateServiceConnect(ctx context.Context, c client.Client, _ *hyperv1.HostedCluster, namespace string) (bool, error) {
 	log := ctrl.LoggerFrom(ctx)
 	var gcpPrivateServiceConnectList hyperv1.GCPPrivateServiceConnectList
 	if err := c.List(ctx, &gcpPrivateServiceConnectList, &client.ListOptions{Namespace: namespace}); err != nil && !apierrors.IsNotFound(err) {
@@ -3254,15 +3321,16 @@ func deleteGCPPrivateServiceConnect(ctx context.Context, c client.Client, hc *hy
 }
 
 func deleteControlPlaneOperatorRBAC(ctx context.Context, c client.Client, rbacNamespace string, controlPlaneNamespace string) error {
-	if _, err := hyperutil.DeleteIfNeeded(ctx, c, &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-operator-" + controlPlaneNamespace, Namespace: rbacNamespace}}); err != nil {
+	if _, err := k8sutil.DeleteIfNeeded(ctx, c, &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-operator-" + controlPlaneNamespace, Namespace: rbacNamespace}}); err != nil {
 		return err
 	}
-	if _, err := hyperutil.DeleteIfNeeded(ctx, c, &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-operator-" + controlPlaneNamespace, Namespace: rbacNamespace}}); err != nil {
+	if _, err := k8sutil.DeleteIfNeeded(ctx, c, &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "control-plane-operator-" + controlPlaneNamespace, Namespace: rbacNamespace}}); err != nil {
 		return err
 	}
 	return nil
 }
 
+//nolint:gocyclo
 func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.HostedCluster) (bool, error) {
 	controlPlaneNamespace := manifests.HostedControlPlaneNamespace(hc.Namespace, hc.Name)
 	log := ctrl.LoggerFrom(ctx)
@@ -3270,6 +3338,10 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 	// Unpause CAPI cluster to allow deletion to proceed
 	if err := pauseCAPICluster(ctx, r.Client, hc, false); err != nil {
 		return false, err
+	}
+
+	if err := r.resolveKarpenterFinalizer(ctx, hc); err != nil {
+		return false, fmt.Errorf("failed to resolve karpenter finalizer: %w", err)
 	}
 
 	// ensure that the cleanup annotation has been propagated to the hcp if it is set
@@ -3301,7 +3373,7 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 		return false, err
 	}
 	if hc != nil && len(hc.Spec.InfraID) > 0 {
-		exists, err := hyperutil.DeleteIfNeeded(ctx, r.Client, &capiv1.Cluster{
+		exists, err := k8sutil.DeleteIfNeeded(ctx, r.Client, &capiv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hc.Spec.InfraID,
 				Namespace: controlPlaneNamespace,
@@ -3385,7 +3457,7 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 		}
 	}
 
-	_, err = hyperutil.DeleteIfNeeded(ctx, r.Client, clusterapi.CAPIManagerClusterRoleBinding(controlPlaneNamespace))
+	_, err = k8sutil.DeleteIfNeeded(ctx, r.Client, clusterapi.CAPIManagerClusterRoleBinding(controlPlaneNamespace))
 	if err != nil {
 		return false, err
 	}
@@ -3394,7 +3466,7 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 	// We want to ensure the HCP resource is deleted before deleting the Namespace.
 	// Otherwise the CPO will be deleted leaving the HCP in a perpetual terminating state preventing further progress.
 	// NOTE: The advancing case is when Get() or Delete() returns an error that the HCP is not found
-	exists, err := hyperutil.DeleteIfNeeded(ctx, r.Client, controlplaneoperator.HostedControlPlane(controlPlaneNamespace, hc.Name))
+	exists, err := k8sutil.DeleteIfNeeded(ctx, r.Client, controlplaneoperator.HostedControlPlane(controlPlaneNamespace, hc.Name))
 	if err != nil {
 		return false, err
 	}
@@ -3407,6 +3479,10 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 		return false, fmt.Errorf("failed to clean up OIDC bucket data: %w", err)
 	}
 
+	if err := r.cleanupGCPOIDCBucketData(ctx, log, hc); err != nil {
+		return false, fmt.Errorf("failed to clean up GCP OIDC bucket data: %w", err)
+	}
+
 	r.KubevirtInfraClients.Delete(hc.Spec.InfraID)
 
 	if skipNSDeletion := hc.Annotations[hyperv1.SkipControlPlaneNamespaceDeletionAnnotation]; skipNSDeletion == "true" {
@@ -3415,7 +3491,7 @@ func (r *HostedClusterReconciler) delete(ctx context.Context, hc *hyperv1.Hosted
 
 	// Block until the namespace is deleted, so that if a hostedcluster is deleted and then re-created with the same name
 	// we don't error initially because we can not create new content in a namespace that is being deleted.
-	exists, err = hyperutil.DeleteIfNeeded(ctx, r.Client, &corev1.Namespace{
+	exists, err = k8sutil.DeleteIfNeeded(ctx, r.Client, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: controlPlaneNamespace},
 	})
 	if err != nil {
@@ -3437,7 +3513,7 @@ func enqueueHostedClustersFunc(metricsSet metrics.MetricsSet, operatorNamespace 
 			requests := []reconcile.Request{}
 			annotations := obj.GetAnnotations()
 			if annotations != nil {
-				hostedClusterName := obj.GetAnnotations()[hyperutil.HostedClusterAnnotation]
+				hostedClusterName := obj.GetAnnotations()[k8sutil.HostedClusterAnnotation]
 				if hostedClusterName != "" {
 					return []reconcile.Request{
 						{NamespacedName: hyperutil.ParseNamespacedName(hostedClusterName)},
@@ -3483,7 +3559,7 @@ func enqueueHostedClustersFunc(metricsSet metrics.MetricsSet, operatorNamespace 
 				return []reconcile.Request{}
 			}
 			if len(hcpList.Items) == 1 {
-				hcAnnotation := hcpList.Items[0].Annotations[hyperutil.HostedClusterAnnotation]
+				hcAnnotation := hcpList.Items[0].Annotations[k8sutil.HostedClusterAnnotation]
 				if hcAnnotation != "" {
 					return []reconcile.Request{{NamespacedName: hyperutil.ParseNamespacedName(hcAnnotation)}}
 				}
@@ -3515,7 +3591,7 @@ func enqueueHostedClustersFunc(metricsSet metrics.MetricsSet, operatorNamespace 
 							log.Error(err, "failed to get hcp")
 							return []reconcile.Request{}
 						}
-						if hcAnnotation := hcp.Annotations[hyperutil.HostedClusterAnnotation]; hcAnnotation != "" {
+						if hcAnnotation := hcp.Annotations[k8sutil.HostedClusterAnnotation]; hcAnnotation != "" {
 							return []reconcile.Request{{NamespacedName: hyperutil.ParseNamespacedName(hcAnnotation)}}
 						}
 						return []reconcile.Request{}
@@ -3774,7 +3850,7 @@ func (r *HostedClusterReconciler) validateAWSConfig(hc *hyperv1.HostedCluster) e
 		hyperv1.OAuthServer,
 		hyperv1.Ignition,
 	} {
-		servicePublishingStrategy := hyperutil.ServicePublishingStrategyByTypeByHC(hc, serviceType)
+		servicePublishingStrategy := netutil.ServicePublishingStrategyByTypeByHC(hc, serviceType)
 		if servicePublishingStrategy == nil {
 			errs = append(errs, fmt.Errorf("service type %v not found", serviceType))
 		}
@@ -3784,13 +3860,13 @@ func (r *HostedClusterReconciler) validateAWSConfig(hc *hyperv1.HostedCluster) e
 		}
 	}
 
-	kasPublishingStrategy := hyperutil.ServicePublishingStrategyByTypeByHC(hc, hyperv1.APIServer)
+	kasPublishingStrategy := netutil.ServicePublishingStrategyByTypeByHC(hc, hyperv1.APIServer)
 	if kasPublishingStrategy == nil {
 		errs = append(errs, fmt.Errorf("service type %v not found", hyperv1.APIServer))
 		return utilerrors.NewAggregate(errs)
 	}
 
-	if kasPublishingStrategy.Type == hyperv1.Route && !hyperutil.UseDedicatedDNSForKASByHC(hc) {
+	if kasPublishingStrategy.Type == hyperv1.Route && !netutil.UseDedicatedDNSForKASByHC(hc) {
 		errs = append(errs, fmt.Errorf("if serviceType is 'APIServer' and publishing strategy is 'Route', then hostname must be set"))
 		return utilerrors.NewAggregate(errs)
 	}
@@ -3800,12 +3876,8 @@ func (r *HostedClusterReconciler) validateAWSConfig(hc *hyperv1.HostedCluster) e
 			errs = append(errs, fmt.Errorf("service type %v with publishing strategy %v is not supported, use Route", hyperv1.APIServer, kasPublishingStrategy.Type))
 		}
 	} else {
-		if !hyperutil.UseDedicatedDNSForKASByHC(hc) && kasPublishingStrategy.Type != hyperv1.LoadBalancer {
+		if !netutil.UseDedicatedDNSForKASByHC(hc) && kasPublishingStrategy.Type != hyperv1.LoadBalancer {
 			errs = append(errs, fmt.Errorf("service type %v with publishing strategy %v is not supported, use Route or LoadBalancer", hyperv1.APIServer, kasPublishingStrategy.Type))
-		}
-		// When using dedicated DNS, the KAS should be exposed as Route.
-		if hyperutil.IsPublicWithDNSByHC(hc) && hyperutil.IsLBKASByHC(hc) {
-			errs = append(errs, fmt.Errorf("service type %v with publishing strategy %v is not supported when any service specifies external DNS, use Route", hyperv1.APIServer, kasPublishingStrategy.Type))
 		}
 	}
 
@@ -3883,6 +3955,20 @@ func (r *HostedClusterReconciler) validateAzureConfig(hc *hyperv1.HostedCluster)
 		return errors.New("azurecluster needs .spec.platform.azure to be filled")
 	}
 
+	// When topology is Private or PublicAndPrivate, the private field must be configured
+	// to provide Azure Private Link Service settings for private API server access.
+	// ARO HCP uses Swift networking, not Private Link Services.
+	if !azureutil.IsAroHCP() &&
+		hc.Spec.Platform.Azure.Topology != "" &&
+		hc.Spec.Platform.Azure.Topology != hyperv1.AzureTopologyPublic &&
+		hc.Spec.Platform.Azure.Private.Type == "" {
+		return field.Invalid(
+			field.NewPath("spec", "platform", "azure", "private", "type"),
+			hc.Spec.Platform.Azure.Private.Type,
+			fmt.Sprintf("private.type is required when topology is %q", hc.Spec.Platform.Azure.Topology),
+		)
+	}
+
 	return nil
 }
 
@@ -3943,6 +4029,7 @@ func (r *HostedClusterReconciler) validateNetworks(hc *hyperv1.HostedCluster) er
 	errs = append(errs, validateSliceNetworkCIDRs(hc)...)
 	errs = append(errs, checkAdvertiseAddressOverlapping(hc)...)
 	errs = append(errs, validateNodePortVsServiceNetwork(hc)...)
+	errs = append(errs, validateNodePortPortRange(hc)...)
 
 	return errs.ToAggregate()
 }
@@ -4132,6 +4219,87 @@ func validateNodePortVsServiceNetwork(hc *hyperv1.HostedCluster) field.ErrorList
 	return errs
 }
 
+// parseNodePortRange parses a ServiceNodePortRange string like "30000-32767" into min/max values.
+// This range defines which ports on worker nodes are available for NodePort services.
+// The range is configurable per cluster via spec.configuration.network.serviceNodePortRange,
+// with a default of 30000-32767 (following Kubernetes standard).
+func parseNodePortRange(rangeStr string) (min, max int32, err error) {
+	if rangeStr == "" {
+		return 30000, 32767, nil // Default range
+	}
+
+	parts := strings.Split(rangeStr, "-")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid range format: %s", rangeStr)
+	}
+
+	minVal, err := strconv.ParseInt(parts[0], 10, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid minimum port: %s", parts[0])
+	}
+
+	maxVal, err := strconv.ParseInt(parts[1], 10, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid maximum port: %s", parts[1])
+	}
+
+	minPort, maxPort := int32(minVal), int32(maxVal)
+	if minPort > maxPort {
+		return 0, 0, fmt.Errorf("invalid range: minimum port %d must be less than or equal to maximum port %d", minPort, maxPort)
+	}
+	return minPort, maxPort, nil
+}
+
+// validateNodePortPortRange validates that NodePort.Port is within the configured ServiceNodePortRange.
+//
+// NodePort services expose applications on worker nodes using a specific port. The available port range
+// is controlled by the kube-apiserver's --service-node-port-range flag, which prevents conflicts with
+// system services and other applications running on nodes.
+//
+// This validation ensures:
+// 1. Specified ports fall within the cluster's configured range (preventing kube-apiserver rejection)
+// 2. Port 0 (dynamic assignment) is always allowed (kube-apiserver will auto-assign from valid range)
+// 3. Early feedback to users instead of late failure during cluster provisioning
+//
+// The range is configurable via spec.configuration.network.serviceNodePortRange, defaulting to
+// the Kubernetes standard of 30000-32767.
+func validateNodePortPortRange(hc *hyperv1.HostedCluster) field.ErrorList {
+	var errs field.ErrorList
+
+	// Get the configured NodePort range for this cluster
+	nodePortRange := ""
+	if hc.Spec.Configuration != nil && hc.Spec.Configuration.Network != nil {
+		nodePortRange = hc.Spec.Configuration.Network.ServiceNodePortRange
+	}
+	if nodePortRange == "" {
+		nodePortRange = config.DefaultServiceNodePortRange
+	}
+
+	// Parse the range
+	minPort, maxPort, err := parseNodePortRange(nodePortRange)
+	if err != nil {
+		errs = append(errs, field.Invalid(
+			field.NewPath("spec.configuration.network.serviceNodePortRange"),
+			nodePortRange,
+			fmt.Sprintf("invalid ServiceNodePortRange format: %v", err)))
+		return errs
+	}
+
+	// Validate NodePort.Port against the configured range
+	for idx, svc := range hc.Spec.Services {
+		if svc.Service == hyperv1.APIServer && svc.Type == hyperv1.NodePort && svc.NodePort != nil {
+			port := svc.NodePort.Port
+			if port > 0 && (port < minPort || port > maxPort) {
+				errs = append(errs, field.Invalid(
+					field.NewPath(fmt.Sprintf("spec.services[%d].nodePort.port", idx)),
+					port,
+					fmt.Sprintf("port must be within the configured range %d-%d or 0 for dynamic assignment", minPort, maxPort)))
+			}
+		}
+	}
+	return errs
+}
+
 func validateSliceNetworkCIDRs(hc *hyperv1.HostedCluster) field.ErrorList {
 	var cidrEntries []cidrEntry
 
@@ -4201,6 +4369,33 @@ const (
 	serviceAccountSigningKeySecret = "sa-signing-key"
 	serviceSignerPublicKey         = "service-account.pub"
 )
+
+func (r *HostedClusterReconciler) reconcileOIDCDocumentsWithStatus(ctx context.Context, hcluster *hyperv1.HostedCluster, reconcileFunc func() error) error {
+	if err := reconcileFunc(); err != nil {
+		meta.SetStatusCondition(&hcluster.Status.Conditions, metav1.Condition{
+			Type:               string(hyperv1.ValidOIDCConfiguration),
+			Status:             metav1.ConditionFalse,
+			Reason:             hyperv1.OIDCConfigurationInvalidReason,
+			ObservedGeneration: hcluster.Generation,
+			Message:            err.Error(),
+		})
+		if statusErr := r.Client.Status().Update(ctx, hcluster); statusErr != nil {
+			return fmt.Errorf("failed to reconcile OIDC documents: %s, failed to update status: %w", err, statusErr)
+		}
+		return fmt.Errorf("failed to reconcile OIDC documents: %w", err)
+	}
+	meta.SetStatusCondition(&hcluster.Status.Conditions, metav1.Condition{
+		Type:               string(hyperv1.ValidOIDCConfiguration),
+		Status:             metav1.ConditionTrue,
+		Reason:             hyperv1.AsExpectedReason,
+		ObservedGeneration: hcluster.Generation,
+		Message:            "OIDC configuration is valid",
+	})
+	if err := r.Client.Status().Update(ctx, hcluster); err != nil {
+		return fmt.Errorf("failed to update OIDC status: %w", err)
+	}
+	return nil
+}
 
 func oidcDocumentGenerators() map[string]oidc.OIDCDocumentGeneratorFunc {
 	return map[string]oidc.OIDCDocumentGeneratorFunc{
@@ -4357,8 +4552,8 @@ func (r *HostedClusterReconciler) reconcileAWSResourceTags(ctx context.Context, 
 	return nil
 }
 
-func (r *HostedClusterReconciler) reconcileAWSSubnets(ctx context.Context, createOrUpdate upsert.CreateOrUpdateFN,
-	infraCR client.Object, namespace, clusterName, hcpNamespace string,
+func (r *HostedClusterReconciler) reconcileAWSSubnets(ctx context.Context, _ upsert.CreateOrUpdateFN,
+	_ client.Object, namespace, clusterName, _ string,
 ) error {
 	nodePools, err := listNodePools(ctx, r.Client, namespace, clusterName)
 	if err != nil {
@@ -4411,6 +4606,13 @@ func (r *HostedClusterReconciler) isAWSNodeTerminationHandlerNeeded(ctx context.
 	}
 
 	for _, nodePool := range nodePools {
+		// Check API spec first - marketType: Spot
+		if nodePool.Spec.Platform.AWS != nil &&
+			nodePool.Spec.Platform.AWS.Placement != nil &&
+			nodePool.Spec.Platform.AWS.Placement.MarketType == hyperv1.MarketTypeSpot {
+			return true, nil
+		}
+		// Check annotation for backward compatibility (used for e2e testing)
 		if nodePool.Annotations != nil {
 			if _, ok := nodePool.Annotations["hypershift.openshift.io/enable-spot"]; ok {
 				return true, nil
@@ -4932,7 +5134,7 @@ func ensureReferencedResourceAnnotation(ctx context.Context, client client.Clien
 }
 
 func ensureHostedResourcesAreEmpty(ctx context.Context, crclient client.Client, hcluster *hyperv1.HostedCluster, obj client.Object) error {
-	if !azureutil.IsAroHCP() || !hyperutil.HasAnnotationWithValue(obj, hyperv1.HostedClusterSourcedAnnotation, "true") {
+	if !azureutil.IsAroHCP() || !k8sutil.HasAnnotationWithValue(obj, hyperv1.HostedClusterSourcedAnnotation, "true") {
 		return nil
 	}
 	var cm corev1.Secret
@@ -4971,7 +5173,7 @@ func (r *HostedClusterReconciler) reconcileAdditionalTrustBundle(ctx context.Con
 	dest := controlplaneoperator.UserCABundle(controlPlaneNamespace)
 	if hcluster.Spec.AdditionalTrustBundle == nil {
 		// If the HostedCluster has no additional trust bundle, delete the destination ConfigMap if it exists
-		if _, err := hyperutil.DeleteIfNeeded(ctx, r.Client, dest); err != nil {
+		if _, err := k8sutil.DeleteIfNeeded(ctx, r.Client, dest); err != nil {
 			return fmt.Errorf("failed to delete unused additionalTrustBundle: %w", err)
 		}
 		return nil
@@ -5053,14 +5255,18 @@ func (r *HostedClusterReconciler) reconcileCAPIFinalizers(ctx context.Context, h
 	return nil
 }
 
-func computeGCPPSCCondition(gcpPSCList hyperv1.GCPPrivateServiceConnectList, conditionType hyperv1.ConditionType) metav1.Condition {
+// computeEndpointServiceCondition is a platform-agnostic helper that aggregates conditions
+// from endpoint service resources. It iterates over the provided conditions, finds matching
+// conditions by type, and returns a summary condition. This can be used by any platform
+// (e.g., GCP PSC, Azure Private Link Service) that follows the same pattern.
+func computeEndpointServiceCondition(resourceConditions [][]metav1.Condition, conditionType hyperv1.ConditionType, errorReason, successReason, notFoundMessage string) metav1.Condition {
 	var messages []string
-	var conditions []metav1.Condition
+	var matched []metav1.Condition
 
-	for _, psc := range gcpPSCList.Items {
-		condition := meta.FindStatusCondition(psc.Status.Conditions, string(conditionType))
+	for _, conditions := range resourceConditions {
+		condition := meta.FindStatusCondition(conditions, string(conditionType))
 		if condition != nil {
-			conditions = append(conditions, *condition)
+			matched = append(matched, *condition)
 
 			if condition.Status == metav1.ConditionFalse {
 				messages = append(messages, condition.Message)
@@ -5068,12 +5274,12 @@ func computeGCPPSCCondition(gcpPSCList hyperv1.GCPPrivateServiceConnectList, con
 		}
 	}
 
-	if len(conditions) == 0 {
+	if len(matched) == 0 {
 		return metav1.Condition{
 			Type:    string(conditionType),
 			Status:  metav1.ConditionUnknown,
 			Reason:  hyperv1.StatusUnknownReason,
-			Message: "GCPPrivateServiceConnect conditions not found",
+			Message: notFoundMessage,
 		}
 	}
 
@@ -5081,7 +5287,7 @@ func computeGCPPSCCondition(gcpPSCList hyperv1.GCPPrivateServiceConnectList, con
 		return metav1.Condition{
 			Type:    string(conditionType),
 			Status:  metav1.ConditionFalse,
-			Reason:  hyperv1.GCPErrorReason,
+			Reason:  errorReason,
 			Message: strings.Join(messages, "; "),
 		}
 	}
@@ -5089,7 +5295,33 @@ func computeGCPPSCCondition(gcpPSCList hyperv1.GCPPrivateServiceConnectList, con
 	return metav1.Condition{
 		Type:    string(conditionType),
 		Status:  metav1.ConditionTrue,
-		Reason:  hyperv1.GCPSuccessReason,
+		Reason:  successReason,
 		Message: hyperv1.AllIsWellMessage,
 	}
+}
+
+// propagateControlPlaneVersion copies the ControlPlaneVersion status from the
+// HostedControlPlane to the HostedCluster using DeepCopy for value safety.
+// When HCP is nil (not yet created) the existing HC value is preserved.
+func propagateControlPlaneVersion(hcluster *hyperv1.HostedCluster, hcp *hyperv1.HostedControlPlane) {
+	if hcp == nil {
+		return
+	}
+	hcluster.Status.ControlPlaneVersion = *hcp.Status.ControlPlaneVersion.DeepCopy()
+}
+
+func computeGCPPSCCondition(gcpPSCList hyperv1.GCPPrivateServiceConnectList, conditionType hyperv1.ConditionType) metav1.Condition {
+	resourceConditions := make([][]metav1.Condition, len(gcpPSCList.Items))
+	for i, psc := range gcpPSCList.Items {
+		resourceConditions[i] = psc.Status.Conditions
+	}
+	return computeEndpointServiceCondition(resourceConditions, conditionType, hyperv1.GCPErrorReason, hyperv1.GCPSuccessReason, "GCPPrivateServiceConnect conditions not found")
+}
+
+func computeAzurePLSCondition(azPLSList hyperv1.AzurePrivateLinkServiceList, conditionType hyperv1.ConditionType) metav1.Condition {
+	resourceConditions := make([][]metav1.Condition, len(azPLSList.Items))
+	for i, pls := range azPLSList.Items {
+		resourceConditions[i] = pls.Status.Conditions
+	}
+	return computeEndpointServiceCondition(resourceConditions, conditionType, hyperv1.AzurePLSErrorReason, hyperv1.AzurePLSSuccessReason, "AzurePrivateLinkService conditions not found")
 }

@@ -110,8 +110,31 @@ type ImageMetadataProvider interface {
 	GetOverride(ctx context.Context, imageRef string, pullSecret []byte) (*reference.DockerImageReference, error)
 }
 
+//go:generate ../../hack/tools/bin/mockgen -package=util -destination=imagemetadata_mock.go github.com/docker/distribution Repository,TagService,ManifestService
+
+// metadataGetterFn is a function that retrieves image metadata from a registry.
+type metadataGetterFn func(ctx context.Context, imageRef string, pullSecret []byte) (*dockerv1client.DockerImageConfig, []distribution.Descriptor, distribution.BlobStore, error)
+
 type RegistryClientImageMetadataProvider struct {
 	OpenShiftImageRegistryOverrides map[string][]string
+	// repoSetupFn overrides GetRepoSetup for testing; nil means use the real implementation.
+	repoSetupFn func(ctx context.Context, imageRef string, pullSecret []byte) (distribution.Repository, *reference.DockerImageReference, error)
+	// metadataGetter overrides getMetadata for testing; nil means use the real implementation.
+	metadataGetter metadataGetterFn
+}
+
+func (r *RegistryClientImageMetadataProvider) getRepoSetup(ctx context.Context, imageRef string, pullSecret []byte) (distribution.Repository, *reference.DockerImageReference, error) {
+	if r.repoSetupFn != nil {
+		return r.repoSetupFn(ctx, imageRef, pullSecret)
+	}
+	return GetRepoSetup(ctx, imageRef, pullSecret)
+}
+
+func (r *RegistryClientImageMetadataProvider) getMetadataGetter() metadataGetterFn {
+	if r.metadataGetter != nil {
+		return r.metadataGetter
+	}
+	return getMetadata
 }
 
 // ImageMetadata returns metadata for a given image using the given pull secret to authenticate.
@@ -124,7 +147,7 @@ func (r *RegistryClientImageMetadataProvider) ImageMetadata(ctx context.Context,
 	}
 
 	// Get the image repo info based the source/mirrors in the ICSPs/IDMSs
-	ref := SeekOverride(ctx, r.OpenShiftImageRegistryOverrides, parsedImageRef, pullSecret)
+	ref := r.seekOverride(ctx, parsedImageRef, pullSecret)
 	refPullSpec := ref.String()
 
 	// Check the cache for the image
@@ -169,7 +192,7 @@ func (r *RegistryClientImageMetadataProvider) GetOverride(ctx context.Context, i
 		return nil, fmt.Errorf("failed to parse image reference %q: %w", imageRef, err)
 	}
 
-	ref = SeekOverride(ctx, r.OpenShiftImageRegistryOverrides, parsedImageRef, pullSecret)
+	ref = r.seekOverride(ctx, parsedImageRef, pullSecret)
 
 	return ref, nil
 }
@@ -202,7 +225,7 @@ func (r *RegistryClientImageMetadataProvider) GetDigest(ctx context.Context, ima
 	}
 
 	// Get the image repo info based the source/mirrors in the ICSPs/IDMSs
-	ref = SeekOverride(ctx, r.OpenShiftImageRegistryOverrides, parsedImageRef, pullSecret)
+	ref = r.seekOverride(ctx, parsedImageRef, pullSecret)
 	composedRef := ref.String()
 
 	// If the overridden image name is in the cache, return early
@@ -211,7 +234,7 @@ func (r *RegistryClientImageMetadataProvider) GetDigest(ctx context.Context, ima
 		return imageDigest.(digest.Digest), ref, nil
 	}
 
-	repo, composedParsedRef, err := GetRepoSetup(ctx, composedRef, pullSecret)
+	repo, composedParsedRef, err := r.getRepoSetup(ctx, composedRef, pullSecret)
 	if err != nil || repo == nil {
 		return "", nil, fmt.Errorf("failed to create repository client for %s: %w", ref.DockerClientDefaults().RegistryURL(), err)
 	}
@@ -248,7 +271,7 @@ func (r *RegistryClientImageMetadataProvider) GetManifest(ctx context.Context, i
 	}
 
 	// Get the image repo info based the source/mirrors in the ICSPs/IDMSs
-	ref := SeekOverride(ctx, r.OpenShiftImageRegistryOverrides, parsedImageRef, pullSecret)
+	ref := r.seekOverride(ctx, parsedImageRef, pullSecret)
 
 	// Check the cache for the image
 	if manifest, exists := manifestsCache.Get(ref.String()); exists {
@@ -256,7 +279,7 @@ func (r *RegistryClientImageMetadataProvider) GetManifest(ctx context.Context, i
 	}
 
 	// Look up the manifest
-	manifest, _, err := getManifest(ctx, ref.String(), pullSecret)
+	manifest, _, err := r.getManifest(ctx, ref.String(), pullSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -284,15 +307,15 @@ func (r *RegistryClientImageMetadataProvider) GetMetadata(ctx context.Context, i
 	}
 
 	// Get the image repo info based the source/mirrors in the ICSPs/IDMSs
-	ref = SeekOverride(ctx, r.OpenShiftImageRegistryOverrides, parsedImageRef, pullSecret)
+	ref = r.seekOverride(ctx, parsedImageRef, pullSecret)
 	composedRef := ref.String()
 
 	return getMetadata(ctx, composedRef, pullSecret)
 }
 
 // getManifest gets the manifest from an image
-func getManifest(ctx context.Context, imageRef string, pullSecret []byte) (distribution.Manifest, digest.Digest, error) {
-	repo, ref, err := GetRepoSetup(ctx, imageRef, pullSecret)
+func (r *RegistryClientImageMetadataProvider) getManifest(ctx context.Context, imageRef string, pullSecret []byte) (distribution.Manifest, digest.Digest, error) {
+	repo, ref, err := r.getRepoSetup(ctx, imageRef, pullSecret)
 	if err != nil {
 		return nil, "", err
 	}
@@ -510,9 +533,10 @@ func GetPayloadVersion(ctx context.Context, releaseImageProvider releaseinfo.Pro
 	return &version, nil
 }
 
-func SeekOverride(ctx context.Context, openshiftImageRegistryOverrides map[string][]string, parsedImageReference reference.DockerImageReference, pullSecret []byte) *reference.DockerImageReference {
+func (r *RegistryClientImageMetadataProvider) seekOverride(ctx context.Context, parsedImageReference reference.DockerImageReference, pullSecret []byte) *reference.DockerImageReference {
+	getter := r.getMetadataGetter()
 	log := ctrl.LoggerFrom(ctx)
-	for source, mirrors := range openshiftImageRegistryOverrides {
+	for source, mirrors := range r.OpenShiftImageRegistryOverrides {
 		// Skip empty sources
 		if source == "" {
 			continue
@@ -543,9 +567,10 @@ func SeekOverride(ctx context.Context, openshiftImageRegistryOverrides map[strin
 
 				// Cache miss - verify mirror availability with 15s timeout
 				verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-				defer cancel()
+				_, _, _, err = getter(verifyCtx, mirrorURL, pullSecret)
+				cancel()
 
-				if _, _, _, err = getMetadata(verifyCtx, mirrorURL, pullSecret); err == nil {
+				if err == nil {
 					log.Info("Mirror verified as available", "mirror", mirrorURL, "timeout", "15s")
 					mirrorCache.set(mirrorURL, pullSecret, true)
 					return ref

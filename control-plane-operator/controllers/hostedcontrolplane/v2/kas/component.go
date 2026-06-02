@@ -55,6 +55,10 @@ func NewComponent() component.ControlPlaneComponent {
 			component.WithAdaptFunction(adaptLocalhostKubeconfigSecret),
 		).
 		WithManifestAdapter(
+			"kas-bootstrap-container-kubeconfig.yaml",
+			component.WithAdaptFunction(adaptKASBootstrapContainerKubeconfigSecret),
+		).
+		WithManifestAdapter(
 			"custom-admin-kubeconfig.yaml",
 			component.WithAdaptFunction(adaptCustomAdminKubeconfigSecret),
 			component.WithPredicate(enableIfCustomKubeconfig),
@@ -108,6 +112,12 @@ func NewComponent() component.ControlPlaneComponent {
 			"aws-pod-identity-webhook-kubeconfig.yaml",
 			component.EnableForPlatform(hyperv1.AWSPlatform),
 			component.WithAdaptFunction(adaptAWSPodIdentityWebhookKubeconfigSecret),
+			component.ReconcileExisting(),
+		).
+		WithManifestAdapter(
+			"azure-workload-identity-webhook-kubeconfig.yaml",
+			component.EnableForPlatform(hyperv1.AzurePlatform),
+			component.WithAdaptFunction(adaptAzureWorkloadIdentityWebhookKubeconfigSecret),
 			component.ReconcileExisting(),
 		).
 		WithManifestAdapter(

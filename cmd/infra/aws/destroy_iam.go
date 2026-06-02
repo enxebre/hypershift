@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,12 +10,13 @@ import (
 	awsutil "github.com/openshift/hypershift/cmd/infra/aws/util"
 	"github.com/openshift/hypershift/cmd/log"
 	"github.com/openshift/hypershift/cmd/util"
+	"github.com/openshift/hypershift/support/awsapi"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/go-logr/logr"
@@ -85,59 +87,63 @@ func (o *DestroyIAMOptions) Run(ctx context.Context) error {
 }
 
 func (o *DestroyIAMOptions) DestroyIAM(ctx context.Context) error {
-	awsSession, err := o.AWSCredentialsOpts.GetSession("cli-destroy-iam", o.CredentialsSecretData, o.Region)
+	awsSession, err := o.AWSCredentialsOpts.GetSession(ctx, "cli-destroy-iam", o.CredentialsSecretData, o.Region)
 	if err != nil {
 		return err
 	}
 	awsConfig := awsutil.NewConfig()
-	iamClient := iam.New(awsSession, awsConfig)
+	iamClient := iam.NewFromConfig(*awsSession, func(o *iam.Options) {
+		o.Retryer = awsConfig()
+	})
 
-	err = o.DestroyOIDCResources(ctx, iamClient)
-	if err != nil {
-		return err
+	// Attempt all IAM cleanup steps even if some fail, to avoid leaking
+	// IAM resources when one step encounters an error.
+	var errs []error
+
+	if err = o.DestroyOIDCResources(ctx, iamClient); err != nil {
+		errs = append(errs, err)
 	}
-	err = o.DestroyWorkerInstanceProfile(iamClient)
-	if err != nil {
-		return err
+	if err = o.DestroyWorkerInstanceProfile(ctx, iamClient); err != nil {
+		errs = append(errs, err)
 	}
 
 	if o.VPCOwnerCredentialsOpts.AWSCredentialsFile != "" {
-		vpcOwnerAWSSession, err := o.VPCOwnerCredentialsOpts.GetSession("cli-destroy-iam", nil, o.Region)
+		vpcOwnerAWSSession, err := o.VPCOwnerCredentialsOpts.GetSession(ctx, "cli-destroy-iam", nil, o.Region)
 		if err != nil {
-			return err
+			return utilerrors.NewAggregate(append(errs, err))
 		}
-		vpcOwnerIAMClient := iam.New(vpcOwnerAWSSession, awsConfig)
+		vpcOwnerIAMClient := iam.NewFromConfig(*vpcOwnerAWSSession, func(o *iam.Options) {
+			o.Retryer = awsConfig()
+		})
 		if err = o.DestroySharedVPCRoles(ctx, iamClient, vpcOwnerIAMClient); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
-func (o *DestroyIAMOptions) DestroyOIDCResources(ctx context.Context, iamClient iamiface.IAMAPI) error {
-	oidcProviderList, err := iamClient.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{})
+func (o *DestroyIAMOptions) DestroyOIDCResources(ctx context.Context, iamClient awsapi.IAMAPI) error {
+	oidcProviderList, err := iamClient.ListOpenIDConnectProviders(ctx, &iam.ListOpenIDConnectProvidersInput{})
 	if err != nil {
 		return err
 	}
+
+	var errs []error
 
 	for _, provider := range oidcProviderList.OpenIDConnectProviderList {
 		// OIDC Provider ARN is of the form arn:aws:iam::<account-id>:oidc-provider/hypershift-ci-2-oidc.s3.us-east-1.amazonaws.com/<infra-id>
 		arnTokens := strings.Split(*provider.Arn, "/")
 		arnInfraID := arnTokens[len(arnTokens)-1]
 		if arnInfraID == o.InfraID {
-			_, err := iamClient.DeleteOpenIDConnectProvider(&iam.DeleteOpenIDConnectProviderInput{
+			_, err := iamClient.DeleteOpenIDConnectProvider(ctx, &iam.DeleteOpenIDConnectProviderInput{
 				OpenIDConnectProviderArn: provider.Arn,
 			})
 			if err != nil {
-				if aerr, ok := err.(awserr.Error); ok {
-					if aerr.Code() != iam.ErrCodeNoSuchEntityException {
-						o.Log.Error(aerr, "Error deleting OIDC provider", "providerARN", provider.Arn)
-						return aerr
-					}
-				} else {
+				var nse *iamtypes.NoSuchEntityException
+				if !errors.As(err, &nse) {
 					o.Log.Error(err, "Error deleting OIDC provider", "providerARN", provider.Arn)
-					return err
+					errs = append(errs, fmt.Errorf("failed to delete OIDC provider %s: %w", *provider.Arn, err))
 				}
 			} else {
 				o.Log.Info("Deleted OIDC provider", "providerARN", provider.Arn)
@@ -148,53 +154,54 @@ func (o *DestroyIAMOptions) DestroyOIDCResources(ctx context.Context, iamClient 
 
 	// Delete the shared role
 	removed := false
-	if removed, err = o.DestroyOIDCRole(iamClient, "shared-role"); err != nil {
-		return err
+	if removed, err = o.DestroyOIDCRole(ctx, iamClient, "shared-role"); err != nil {
+		errs = append(errs, err)
 	}
 	if removed {
 		// The cluster was created with a single shared role, so we are done.
 		// Save on additional API calls and just return here.
-		return nil
+		return utilerrors.NewAggregate(errs)
 	}
-	// Delete individual component roles
-	if err = o.DestroyOIDCRoleWithRetry(iamClient, "openshift-ingress"); err != nil {
-		return err
+	// Delete individual component roles. Attempt all deletions even if some
+	// fail, to avoid leaking IAM roles.
+	//
+	// Roles that require retry (e.g. due to eventually-consistent policy
+	// detachment) are handled first via DestroyOIDCRoleWithRetry.
+	roleNamesWithRetry := []string{
+		"openshift-ingress",
 	}
-	if _, err = o.DestroyOIDCRole(iamClient, "openshift-image-registry"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "aws-ebs-csi-driver-controller"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "cloud-controller"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "node-pool"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "control-plane-operator"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "cloud-network-config-controller"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "kms-provider"); err != nil {
-		return err
-	}
-	if _, err = o.DestroyOIDCRole(iamClient, "karpenter"); err != nil {
-		return err
+	for _, name := range roleNamesWithRetry {
+		if err := o.DestroyOIDCRoleWithRetry(ctx, iamClient, name); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
-	return nil
+	roleNames := []string{
+		"openshift-image-registry",
+		"aws-ebs-csi-driver-controller",
+		"cloud-controller",
+		"node-pool",
+		"control-plane-operator",
+		"cloud-network-config-controller",
+		"kms-provider",
+		"karpenter",
+	}
+	for _, name := range roleNames {
+		if _, err := o.DestroyOIDCRole(ctx, iamClient, name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
 }
 
 // DestroyOIDCRoleWithRetry retries the entire DestroyOIDCRole operation if it fails due to attached policies
-func (o *DestroyIAMOptions) DestroyOIDCRoleWithRetry(client iamiface.IAMAPI, name string) error {
-	return wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := o.DestroyOIDCRole(client, name)
+func (o *DestroyIAMOptions) DestroyOIDCRoleWithRetry(ctx context.Context, client awsapi.IAMAPI, name string) error {
+	return wait.PollUntilContextTimeout(ctx, 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := o.DestroyOIDCRole(ctx, client, name)
 		if err != nil {
-			// Check if the error message indicates a delete conflict
-			if strings.Contains(err.Error(), "DeleteConflict") {
+			var dce *iamtypes.DeleteConflictException
+			if errors.As(err, &dce) {
 				o.Log.Info("Role deletion failed due to attached policies, retrying entire operation", "role", fmt.Sprintf("%s-%s", o.InfraID, name))
 				return false, nil
 			}
@@ -205,9 +212,9 @@ func (o *DestroyIAMOptions) DestroyOIDCRoleWithRetry(client iamiface.IAMAPI, nam
 }
 
 // DestroyOIDCRole deletes an IAM Role with all its policies
-func (o *DestroyIAMOptions) DestroyOIDCRole(client iamiface.IAMAPI, name string) (removed bool, reterr error) {
+func (o *DestroyIAMOptions) DestroyOIDCRole(ctx context.Context, client awsapi.IAMAPI, name string) (removed bool, reterr error) {
 	roleName := fmt.Sprintf("%s-%s", o.InfraID, name)
-	role, err := existingRole(client, roleName)
+	role, err := existingRole(ctx, client, roleName)
 	if err != nil {
 		return false, fmt.Errorf("cannot check for existing role: %w", err)
 	}
@@ -218,7 +225,7 @@ func (o *DestroyIAMOptions) DestroyOIDCRole(client iamiface.IAMAPI, name string)
 	}
 
 	// Detach managed policies
-	attachedPolicies, err := client.ListAttachedRolePolicies(&iam.ListAttachedRolePoliciesInput{
+	attachedPolicies, err := client.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
@@ -226,7 +233,7 @@ func (o *DestroyIAMOptions) DestroyOIDCRole(client iamiface.IAMAPI, name string)
 	}
 
 	for _, policy := range attachedPolicies.AttachedPolicies {
-		_, err = client.DetachRolePolicy(&iam.DetachRolePolicyInput{
+		_, err = client.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
 			PolicyArn: policy.PolicyArn,
 			RoleName:  aws.String(roleName),
 		})
@@ -236,36 +243,34 @@ func (o *DestroyIAMOptions) DestroyOIDCRole(client iamiface.IAMAPI, name string)
 		o.Log.Info("Detached role policy", "role", roleName, "policy", *policy.PolicyArn)
 	}
 
-	// List and delete all inline policies
-	listPoliciesOutput, err := client.ListRolePolicies(&iam.ListRolePoliciesInput{
+	// List and delete all inline policies (paginated: no count limit on inline policies)
+	inlinePoliciesPaginator := iam.NewListRolePoliciesPaginator(client, &iam.ListRolePoliciesInput{
 		RoleName: aws.String(roleName),
 	})
-	if err != nil {
-		return false, fmt.Errorf("failed to list inline policies for role %s: %w", roleName, err)
-	}
-
-	for _, policyName := range listPoliciesOutput.PolicyNames {
-		_, err := client.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
-			PolicyName: policyName,
-			RoleName:   aws.String(roleName),
-		})
+	for inlinePoliciesPaginator.HasMorePages() {
+		page, err := inlinePoliciesPaginator.NextPage(ctx)
 		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				if aerr.Code() != iam.ErrCodeNoSuchEntityException {
-					o.Log.Error(aerr, "Error deleting role policy", "role", roleName, "policy", *policyName)
-					return false, aerr
+			return false, fmt.Errorf("failed to list inline policies for role %s: %w", roleName, err)
+		}
+		for _, policyName := range page.PolicyNames {
+			_, err := client.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
+				PolicyName: aws.String(policyName),
+				RoleName:   aws.String(roleName),
+			})
+			if err != nil {
+				var nse *iamtypes.NoSuchEntityException
+				if !errors.As(err, &nse) {
+					o.Log.Error(err, "Error deleting role policy", "role", roleName, "policy", policyName)
+					return false, err
 				}
 			} else {
-				o.Log.Error(err, "Error deleting role policy", "role", roleName, "policy", *policyName)
-				return false, err
+				o.Log.Info("Deleted role policy", "role", roleName, "policy", policyName)
 			}
-		} else {
-			o.Log.Info("Deleted role policy", "role", roleName, "policy", *policyName)
 		}
 	}
 
 	// Delete the role
-	_, err = client.DeleteRole(&iam.DeleteRoleInput{
+	_, err = client.DeleteRole(ctx, &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
@@ -276,24 +281,24 @@ func (o *DestroyIAMOptions) DestroyOIDCRole(client iamiface.IAMAPI, name string)
 	return true, nil
 }
 
-func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI) error {
+func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(ctx context.Context, client awsapi.IAMAPI) error {
 	profileName := DefaultProfileName(o.InfraID)
-	instanceProfile, err := existingInstanceProfile(client, profileName)
+	instanceProfile, err := existingInstanceProfile(ctx, client, profileName)
 	if err != nil {
 		return fmt.Errorf("cannot check for existing instance profile: %w", err)
 	}
 	if instanceProfile != nil {
 		for _, role := range instanceProfile.Roles {
-			_, err := client.RemoveRoleFromInstanceProfile(&iam.RemoveRoleFromInstanceProfileInput{
+			_, err := client.RemoveRoleFromInstanceProfile(ctx, &iam.RemoveRoleFromInstanceProfileInput{
 				InstanceProfileName: aws.String(profileName),
 				RoleName:            role.RoleName,
 			})
 			if err != nil {
-				return fmt.Errorf("cannot remove role %s from instance profile %s: %w", aws.StringValue(role.RoleName), profileName, err)
+				return fmt.Errorf("cannot remove role %s from instance profile %s: %w", aws.ToString(role.RoleName), profileName, err)
 			}
-			o.Log.Info("Removed role from instance profile", "profile", profileName, "role", aws.StringValue(role.RoleName))
+			o.Log.Info("Removed role from instance profile", "profile", profileName, "role", aws.ToString(role.RoleName))
 		}
-		_, err := client.DeleteInstanceProfile(&iam.DeleteInstanceProfileInput{
+		_, err := client.DeleteInstanceProfile(ctx, &iam.DeleteInstanceProfileInput{
 			InstanceProfileName: aws.String(profileName),
 		})
 		if err != nil {
@@ -303,17 +308,17 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 	}
 	roleName := fmt.Sprintf("%s-role", profileName)
 	policyName := fmt.Sprintf("%s-policy", profileName)
-	role, err := existingRole(client, roleName)
+	role, err := existingRole(ctx, client, roleName)
 	if err != nil {
 		return fmt.Errorf("cannot check for existing role: %w", err)
 	}
 	if role != nil {
-		hasPolicy, err := existingRolePolicy(client, roleName, policyName)
+		hasPolicy, err := existingRolePolicy(ctx, client, roleName, policyName)
 		if err != nil {
 			return fmt.Errorf("cannot check for existing role policy: %w", err)
 		}
 		if hasPolicy {
-			_, err := client.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
+			_, err := client.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
 				PolicyName: aws.String(policyName),
 				RoleName:   aws.String(roleName),
 			})
@@ -322,7 +327,7 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 			}
 			o.Log.Info("Deleted role policy", "role", roleName, "policy", policyName)
 		}
-		_, err = client.DeleteRole(&iam.DeleteRoleInput{
+		_, err = client.DeleteRole(ctx, &iam.DeleteRoleInput{
 			RoleName: aws.String(roleName),
 		})
 		if err != nil {
@@ -333,12 +338,12 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 
 	// when using ROSA managed policies to create iam, the worker role name will have ROSAWorkerRoleNameSuffix suffix.
 	roleName = fmt.Sprintf("%s-%s", profileName, ROSAWorkerRoleNameSuffix)
-	role, err = existingRole(client, roleName)
+	role, err = existingRole(ctx, client, roleName)
 	if err != nil {
 		return fmt.Errorf("cannot check for existing role: %w", err)
 	}
 	if role != nil {
-		attachedPolicies, err := client.ListAttachedRolePolicies(&iam.ListAttachedRolePoliciesInput{
+		attachedPolicies, err := client.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
 			RoleName: aws.String(roleName),
 		})
 		if err != nil {
@@ -346,7 +351,7 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 		}
 
 		for _, policy := range attachedPolicies.AttachedPolicies {
-			_, err = client.DetachRolePolicy(&iam.DetachRolePolicyInput{
+			_, err = client.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
 				PolicyArn: policy.PolicyArn,
 				RoleName:  aws.String(roleName),
 			})
@@ -356,7 +361,7 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 			o.Log.Info("Detached role policy", "role", roleName, "policy", *policy.PolicyArn)
 		}
 
-		_, err = client.DeleteRole(&iam.DeleteRoleInput{
+		_, err = client.DeleteRole(ctx, &iam.DeleteRoleInput{
 			RoleName: aws.String(roleName),
 		})
 		if err != nil {
@@ -368,17 +373,17 @@ func (o *DestroyIAMOptions) DestroyWorkerInstanceProfile(client iamiface.IAMAPI)
 	return nil
 }
 
-func (o *DestroyIAMOptions) DestroySharedVPCRoles(ctx context.Context, iamClient, vpcOwnerIAMClient iamiface.IAMAPI) error {
-	var err error
+func (o *DestroyIAMOptions) DestroySharedVPCRoles(ctx context.Context, iamClient, vpcOwnerIAMClient awsapi.IAMAPI) error {
 	ingressRoleClient := vpcOwnerIAMClient
 	if o.PrivateZonesInClusterAccount {
 		ingressRoleClient = iamClient
 	}
-	if _, err = o.DestroyOIDCRole(ingressRoleClient, "shared-vpc-ingress"); err != nil {
-		return err
+	var errs []error
+	if _, err := o.DestroyOIDCRole(ctx, ingressRoleClient, "shared-vpc-ingress"); err != nil {
+		errs = append(errs, err)
 	}
-	if _, err = o.DestroyOIDCRole(vpcOwnerIAMClient, "shared-vpc-control-plane"); err != nil {
-		return err
+	if _, err := o.DestroyOIDCRole(ctx, vpcOwnerIAMClient, "shared-vpc-control-plane"); err != nil {
+		errs = append(errs, err)
 	}
-	return nil
+	return utilerrors.NewAggregate(errs)
 }

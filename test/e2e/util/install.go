@@ -48,10 +48,13 @@ func getInstallOptions(opts HyperShiftOperatorInstallOptions) install.Options {
 
 	installOpts.AWSPrivateCreds = opts.AWSPrivateCredentialsFile
 	installOpts.AWSPrivateRegion = opts.AWSPrivateRegion
+	installOpts.AzurePrivateCreds = opts.AzurePrivateCredentialsFile
+	installOpts.AzurePLSResourceGroup = opts.AzurePLSResourceGroup
 	installOpts.EnableCIDebugOutput = opts.EnableCIDebugOutput
 	installOpts.ExternalDNSCredentials = opts.ExternalDNSCredentials
 	installOpts.ExternalDNSDomainFilter = opts.ExternalDNSDomainFilter
 	installOpts.ExternalDNSProvider = opts.ExternalDNSProvider
+	installOpts.ExternalDNSInterval = "3m"
 	installOpts.HyperShiftImage = opts.HyperShiftOperatorLatestImage
 	installOpts.OIDCStorageProviderS3BucketName = opts.AWSOidcS3BucketName
 	installOpts.OIDCStorageProviderS3Credentials = opts.AWSOidcS3Credentials

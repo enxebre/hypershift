@@ -27,12 +27,20 @@ type FakeHypershiftV1beta1 struct {
 	*testing.Fake
 }
 
+func (c *FakeHypershiftV1beta1) AzurePrivateLinkServices(namespace string) v1beta1.AzurePrivateLinkServiceInterface {
+	return newFakeAzurePrivateLinkServices(c, namespace)
+}
+
 func (c *FakeHypershiftV1beta1) CertificateSigningRequestApprovals(namespace string) v1beta1.CertificateSigningRequestApprovalInterface {
 	return newFakeCertificateSigningRequestApprovals(c, namespace)
 }
 
 func (c *FakeHypershiftV1beta1) GCPPrivateServiceConnects(namespace string) v1beta1.GCPPrivateServiceConnectInterface {
 	return newFakeGCPPrivateServiceConnects(c, namespace)
+}
+
+func (c *FakeHypershiftV1beta1) HCPEtcdBackups(namespace string) v1beta1.HCPEtcdBackupInterface {
+	return newFakeHCPEtcdBackups(c, namespace)
 }
 
 func (c *FakeHypershiftV1beta1) HostedClusters(namespace string) v1beta1.HostedClusterInterface {

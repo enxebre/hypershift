@@ -15,9 +15,11 @@ import (
 	//_ "github.com/prometheus/prometheus/cmd/promtool"
 	_ "github.com/openshift/api/tools"
 	_ "github.com/openshift/api/tools/codegen/cmd"
+	_ "github.com/mikefarah/yq/v4"
 	_ "go.uber.org/mock/mockgen"
 	_ "gotest.tools/gotestsum"
 	_ "honnef.co/go/tools/cmd/staticcheck"
 	_ "k8s.io/code-generator"
+	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 	_ "sigs.k8s.io/kube-api-linter"
 )

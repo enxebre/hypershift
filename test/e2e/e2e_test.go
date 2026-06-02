@@ -75,13 +75,16 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&globalOpts.N4MinorReleaseImage, "e2e.n4-minor-release-image", "", "The n-4 minor OCP release image relative to the latest")
 	flag.StringVar(&globalOpts.PlatformRaw, "e2e.platform", string(hyperv1.AWSPlatform), "The platform to use for the tests")
 	flag.Var(&globalOpts.ConfigurableClusterOptions.Annotations, "e2e.annotations", "Annotations to apply to the HostedCluster (key=value). Can be specified multiple times")
+	flag.Var(&globalOpts.ConfigurableClusterOptions.DisableClusterCapabilities, "e2e.disable-cluster-capabilities", "Cluster capabilities to disable (e.g. ImageRegistry,Console). Can be specified multiple times")
 	flag.Var(&globalOpts.ConfigurableClusterOptions.ClusterCIDR, "e2e.cluster-cidr", "The CIDR of the cluster network. Can be specified multiple times.")
 	flag.Var(&globalOpts.ConfigurableClusterOptions.ServiceCIDR, "e2e.service-cidr", "The CIDR of the service network. Can be specified multiple times.")
 	flag.Var(&globalOpts.ConfigurableClusterOptions.Zone, "e2e.availability-zones", "Availability zones for clusters")
 	flag.StringVar(&globalOpts.HyperShiftOperatorLatestImage, "e2e.hypershift-operator-latest-image", "quay.io/hypershift/hypershift-operator:latest", "The latest HyperShift Operator image to deploy. If e2e.hypershift-operator-initial-image is set (e.g. to run an upgrade test), this image will be considered the latest HyperShift Operator image to upgrade to.")
-	flag.StringVar(&globalOpts.HOInstallationOptions.PrivatePlatform, "e2e.private-platform", "None", "Platform on which private clusters are supported by the HyperShift Operator (supports \"AWS\" or \"None\"). This is a HyperShift Operator installation option")
+	flag.StringVar(&globalOpts.HOInstallationOptions.PrivatePlatform, "e2e.private-platform", "None", "Platform on which private clusters are supported by the HyperShift Operator (supports \"AWS\", \"Azure\", or \"None\"). This is a HyperShift Operator installation option")
 	flag.StringVar(&globalOpts.HOInstallationOptions.AWSPrivateCredentialsFile, "e2e.aws-private-credentials-file", "/etc/hypershift-pool-aws-credentials/credentials", "path to AWS private credentials. This is a HyperShift Operator installation option")
 	flag.StringVar(&globalOpts.HOInstallationOptions.AWSPrivateRegion, "e2e.aws-private-region", "us-east-1", "AWS region where private clusters are supported by the HyperShift Operator. This is a HyperShift Operator installation option")
+	flag.StringVar(&globalOpts.HOInstallationOptions.AzurePrivateCredentialsFile, "e2e.azure-private-credentials-file", "", "Path to Azure credentials file for managing private cluster resources (Private Link Services, Private Endpoints). This is a HyperShift Operator installation option")
+	flag.StringVar(&globalOpts.HOInstallationOptions.AzurePLSResourceGroup, "e2e.azure-pls-resource-group", "", "Azure resource group of the management cluster where Private Link Services and load balancers reside. This is a HyperShift Operator installation option")
 	flag.StringVar(&globalOpts.HOInstallationOptions.AWSOidcS3Credentials, "e2e.aws-oidc-s3-credentials", "/etc/hypershift-pool-aws-credentials/credentials", "AWS S3 credentials for the setup of the OIDC provider. This is a HyperShift Operator installation option")
 	flag.StringVar(&globalOpts.HOInstallationOptions.AWSOidcS3Region, "e2e.aws-oidc-s3-region", "us-east-1", "AWS S3 region for the setup of the OIDC provider. This is a HyperShift Operator installation option")
 	flag.StringVar(&globalOpts.HOInstallationOptions.ExternalDNSProvider, "e2e.external-dns-provider", "aws", "Provider to use for managing DNS records using external-dns. This is a HyperShift Operator installation option")
@@ -91,6 +94,7 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&globalOpts.HOInstallationOptions.PlatformMonitoring, "e2e.platform-monitoring", "All", "The option for enabling platform cluster monitoring when installing the HyperShift Operator. Valid values are: None, OperatorOnly, All. This is a HyperShift Operator installation option")
 	flag.BoolVar(&globalOpts.RunUpgradeTest, "upgrade.run-tests", false, "Run HyperShift Operator upgrade test")
 	flag.StringVar(&globalOpts.ExternalCNIProvider, "e2e.external-cni-provider", "", fmt.Sprintf("The option supports the following CNI providers: %s", e2eutil.CiliumCNIProvider))
+	flag.StringVar(&globalOpts.AdditionalPullSecretFile, "e2e.additional-pull-secret-file", "", "path to a pull secret file for the EnsureGlobalPullSecret test")
 
 	// external OIDC configuration
 	flag.StringVar(&globalOpts.ExternalOIDCProvider, "e2e.external-oidc-provider", "", "if not null, enable external OIDC config with provider. supported value: keycloak, azure")
@@ -160,6 +164,28 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&globalOpts.ConfigurableClusterOptions.PowerVSVpcRegion, "e2e.powervs-vpc-region", "us-south", "IBM Cloud VPC Region for VPC resources. Default is us-south")
 	flag.StringVar(&globalOpts.ConfigurableClusterOptions.PowerVSZone, "e2e.powervs-zone", "us-south", "IBM Cloud zone. Default is us-sout")
 	flag.Var(&globalOpts.ConfigurableClusterOptions.PowerVSProcType, "e2e.powervs-proc-type", "Processor type (dedicated, shared, capped). Default is shared")
+
+	// GCP Platform Flags
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPProject, "e2e.gcp-project", "", "GCP project ID")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPRegion, "e2e.gcp-region", "us-central1", "GCP region")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPNetwork, "e2e.gcp-network", "", "GCP VPC network name")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPPrivateServiceConnectSubnet, "e2e.gcp-psc-subnet", "", "Subnet for Private Service Connect endpoints")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPWorkloadIdentityProjectNumber, "e2e.gcp-wif-project-number", "", "GCP project number for Workload Identity")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPWorkloadIdentityPoolID, "e2e.gcp-wif-pool-id", "", "Workload Identity Pool ID")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPWorkloadIdentityProviderID, "e2e.gcp-wif-provider-id", "", "Workload Identity Provider ID")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPNodePoolServiceAccount, "e2e.gcp-nodepool-sa", "", "Service Account for NodePool CAPG controllers")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPControlPlaneServiceAccount, "e2e.gcp-controlplane-sa", "", "Service Account for Control Plane Operator")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPCloudControllerServiceAccount, "e2e.gcp-cloudcontroller-sa", "", "Service Account for Cloud Controller Manager")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPStorageServiceAccount, "e2e.gcp-storage-sa", "", "Service Account for GCP PD CSI Driver")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPImageRegistryServiceAccount, "e2e.gcp-imageregistry-sa", "", "Service Account for Image Registry Operator")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPNetworkServiceAccount, "e2e.gcp-network-sa", "", "Service Account for Cloud Network Config Controller")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPServiceAccountSigningKeyPath, "e2e.gcp-sa-signing-key-path", "", "Path to the private key file for the GCP service account token issuer")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPEndpointAccess, "e2e.gcp-endpoint-access", string(hyperv1.GCPEndpointAccessPrivate), "GCP endpoint access type: Private or PublicAndPrivate")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPIssuerURL, "e2e.gcp-oidc-issuer-url", "", "The OIDC provider issuer URL for GCP")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPMachineType, "e2e.gcp-machine-type", "", "GCP machine type for node instances. Defaults to n2-standard-4")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPZone, "e2e.gcp-zone", "", "GCP zone for node instances. Defaults to {region}-a")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPSubnet, "e2e.gcp-subnet", "", "Subnet for node instances. Defaults to the PSC subnet value")
+	flag.StringVar(&globalOpts.ConfigurableClusterOptions.GCPBootImage, "e2e.gcp-boot-image", "", "GCP boot image for node instances. Overrides the default RHCOS image from the release payload")
 
 	flag.Parse()
 
@@ -249,6 +275,11 @@ func main(m *testing.M) int {
 func alertSLOs(ctx context.Context) error {
 	if globalOpts.Platform == hyperv1.AzurePlatform {
 		return fmt.Errorf("Alerting SLOs is not supported on Azure")
+	}
+	// TODO(GCP): Revisit. Prometheus support is WIP for GCP.
+	// GKE management clusters don't have OpenShift monitoring (prometheus-k8s service).
+	if globalOpts.Platform == hyperv1.GCPPlatform {
+		return fmt.Errorf("Alerting SLOs is not supported on GCP")
 	}
 
 	// Query fairing for SLOs.

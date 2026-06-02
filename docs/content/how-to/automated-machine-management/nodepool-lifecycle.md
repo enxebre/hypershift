@@ -8,35 +8,14 @@ NodePools represent homogeneous groups of Nodes with a common lifecycle manageme
 
 ## Upgrades and data propagation
 
-There are three main areas that will trigger rolling upgrades across the Nodes when they are changed:
-
-- OCP Version dictated by `spec.release`.
-- Machine configuration via `spec.config`, a knob for `machineconfiguration.openshift.io`.
-- Platform specific changes via `.spec.platform`. Some fields might be immutable whereas other might allow changes e.g. aws instance type.
-
-Some cluster config changes (e.g. proxy, certs) may also trigger a rolling upgrade if the change needs to be propagated to the node.
-
-NodePools support two types of rolling upgrades: Replace and InPlace, specified via [UpgradeType](../../reference/api.md#hypershift.openshift.io/v1beta1.UpgradeType).
+NodePools support two types of rolling upgrades: **Replace** and **InPlace**, specified via [UpgradeType](../../reference/api.md#hypershift.openshift.io/v1beta1.UpgradeType).
 
 !!! important
 
-    You cannot switch the UpgradeType once the NodePool is created. You must specify UpgradeType during NodePool 
+    You cannot switch the UpgradeType once the NodePool is created. You must specify UpgradeType during NodePool
     creation. Modifying the field after the fact may cause nodes to become unmanaged.
 
-### Replace Upgrades
-
-This will create new instances in the new version while removing old nodes in a rolling fashion. This is usually a good choice in cloud environments where this level of immutability is cost effective.
-
-### InPlace Upgrades
-
-This will directly perform updates to the Operating System of the existing instances. This is usually a good choice for environments where the infrastructure constraints are higher e.g. bare metal.
-
-When you are using in place upgrades, Platform specific changes will only affect upcoming new Nodes.
-
-### Data propagation
-
-There some fields which will only propagate in place regardless of the upgrade strategy that is set.
-`.spec.nodeLabels` and `.spec.taints` will be propagated only to new upcoming machines.
+For a comprehensive reference on what triggers a rollout, upgrade strategies, rollout lifecycle, and monitoring, see [NodePool Rollouts](../../reference/nodepool-rollouts.md).
 
 
 ## Triggering Upgrades examples
@@ -94,8 +73,12 @@ Node(s) can become stuck when removing all Nodes from a cluster (scaling NodePoo
 
 Several conditions can prevent Node(s) from being drained successfully:
 
-- The hosted cluster contains `PodDisruptionBudgets` that require at least 
-- The hosted cluster contains pods that use `PersistentVolumes``
+- The hosted cluster contains `PodDisruptionBudgets` that require at least one healthy pod, preventing eviction when there are no other nodes to reschedule onto.
+- The hosted cluster contains pods that use `PersistentVolumes` that cannot be detached from the node.
+
+!!! important
+
+    This is expected behavior. When all nodes are removed simultaneously, pods protected by PodDisruptionBudgets cannot be evicted because the PDB constraints cannot be satisfied with no remaining nodes. As a result, the drain operation blocks indefinitely. Configure `nodeDrainTimeout` to ensure nodes are eventually removed after a bounded period.
 
 #### Prevention
 
@@ -103,5 +86,20 @@ To prevent Nodes from becoming stuck when scaling down, set the `.spec.nodeDrain
 
 This forces Nodes to be removed once the timeout specified in the field has been reached, regardless of whether the node can be drained or the volumes can be detached successfully.
 
+```
+apiVersion: hypershift.openshift.io/v1beta1
+kind: NodePool
+metadata:
+  name: example
+  namespace: clusters
+spec:
+  nodeDrainTimeout: 30m
+  nodeVolumeDetachTimeout: 10m
+  # ...other fields...
+```
+
 !!! note
-    See the [Hypershift API reference page](../../reference/api.md) for more details.
+
+    See the [HyperShift API reference page](../../reference/api.md) for more details on these fields.
+
+    For an alternative approach that skips draining entirely via machine annotations, see [Scaling down data plane to Zero](scale-to-zero-dataplane.md).
