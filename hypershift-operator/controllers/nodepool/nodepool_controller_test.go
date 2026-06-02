@@ -633,7 +633,7 @@ func TestDefaultNodePoolAMI(t *testing.T) {
 				tc.releaseImage = fakereleaseprovider.GetReleaseImage(ctx, hc, client, releaseProvider)
 			}
 
-			tc.image, tc.err = defaultNodePoolAMI(tc.region, tc.specifiedArch, tc.releaseImage)
+			tc.image, tc.err = defaultNodePoolAMI(tc.region, tc.specifiedArch, tc.releaseImage, "")
 			if strings.Contains(tc.name, "successfully") {
 				g.Expect(tc.image).To(Equal(tc.expectedImage))
 				g.Expect(tc.err).To(BeNil())

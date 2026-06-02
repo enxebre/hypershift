@@ -159,12 +159,12 @@ func generateReconciliationActiveCondition(pausedUntilField *string, objectGener
 
 // setPlatformConditions is a hook for platforms to implement custom logic/conditions freely
 // TODO: refactor signature to be inline with the rest of condition setters, and move common conditions like NodePoolValidPlatformImageType to a separate function.
-func (r *NodePoolReconciler) setPlatformConditions(ctx context.Context, hcluster *hyperv1.HostedCluster, nodePool *hyperv1.NodePool, controlPlaneNamespace string, releaseImage *releaseinfo.ReleaseImage) error {
+func (r *NodePoolReconciler) setPlatformConditions(ctx context.Context, hcluster *hyperv1.HostedCluster, nodePool *hyperv1.NodePool, controlPlaneNamespace string, releaseImage *releaseinfo.ReleaseImage, osStream string) error {
 	switch nodePool.Spec.Platform.Type {
 	case hyperv1.KubevirtPlatform:
 		return r.setKubevirtConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
 	case hyperv1.AWSPlatform:
-		return r.setAWSConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
+		return r.setAWSConditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage, osStream)
 	case hyperv1.PowerVSPlatform:
 		return r.setPowerVSconditions(ctx, nodePool, hcluster, controlPlaneNamespace, releaseImage)
 	case hyperv1.OpenStackPlatform:

@@ -430,7 +430,7 @@ func setKarpenterAMILabels(log logr.Logger, userDataSecret *corev1.Secret, regio
 	}
 	supported := 0
 	for _, arch := range supportedArchitectures {
-		ami, err := defaultNodePoolAMI(region, arch, releaseImage)
+		ami, err := defaultNodePoolAMI(region, arch, releaseImage, "")
 		if err != nil {
 			// skip unavailable architectures gracefully
 			log.Error(err, "failed to get default NodePool AMI for architecture", "architecture", arch)

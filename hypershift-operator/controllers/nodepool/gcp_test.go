@@ -512,6 +512,7 @@ func TestGcpMachineTemplateSpec(t *testing.T) {
 				tc.hc,
 				tc.nodePool,
 				releaseImage,
+				"",
 			)
 
 			if tc.expectedErr {
@@ -659,7 +660,7 @@ func TestDefaultNodePoolGCPImage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			image, err := defaultNodePoolGCPImage(tc.arch, tc.releaseImage)
+			image, err := defaultNodePoolGCPImage(tc.arch, tc.releaseImage, "")
 
 			if tc.expectedErr {
 				g.Expect(err).To(HaveOccurred())

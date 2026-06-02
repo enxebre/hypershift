@@ -38,7 +38,20 @@ type ProviderWithOpenShiftImageRegistryOverrides interface {
 // discover constituent component image information.
 type ReleaseImage struct {
 	*imageapi.ImageStream `json:",inline"`
-	StreamMetadata        *CoreOSStreamMetadata `json:"streamMetadata"`
+	StreamMetadata        *CoreOSStreamMetadata            `json:"streamMetadata"`
+	StreamsMetadata       map[string]*CoreOSStreamMetadata `json:"streamsMetadata,omitempty"`
+}
+
+// StreamMetadataForStream returns the CoreOSStreamMetadata for the given stream name.
+// For multi-stream payloads (5.0+), it looks up the stream in StreamsMetadata.
+// For legacy single-stream payloads or when stream is empty, it falls back to StreamMetadata.
+func (i *ReleaseImage) StreamMetadataForStream(stream string) *CoreOSStreamMetadata {
+	if stream != "" && len(i.StreamsMetadata) > 0 {
+		if meta, ok := i.StreamsMetadata[stream]; ok {
+			return meta
+		}
+	}
+	return i.StreamMetadata
 }
 
 type CoreOSStreamMetadata struct {

@@ -1,0 +1,152 @@
+apiVersion: v1
+data:
+  releaseVersion: 5.0.0-0.nightly-2026-05-20-043516
+  stream: |
+    {
+      "stream": "rhcos-4.21",
+      "architectures": {
+        "x86_64": {
+          "artifacts": {},
+          "images": {
+            "aws": {
+              "regions": {
+                "us-east-1": {
+                  "release": "421.97.202505081234-0",
+                  "image": "ami-rhel9-us-east-1"
+                },
+                "us-west-2": {
+                  "release": "421.97.202505081234-0",
+                  "image": "ami-rhel9-us-west-2"
+                }
+              }
+            },
+            "gcp": {
+              "project": "rhcos-cloud",
+              "name": "rhcos-421-97-rhel9-x86-64",
+              "family": "rhcos-4-21"
+            }
+          },
+          "rhel-coreos-extensions": {
+            "azure-disk": {
+              "release": "421.97.202505081234-0",
+              "url": "https://example.com/rhcos-rhel9.vhd"
+            }
+          }
+        },
+        "aarch64": {
+          "artifacts": {},
+          "images": {
+            "aws": {
+              "regions": {
+                "us-east-1": {
+                  "release": "421.97.202505081234-0",
+                  "image": "ami-rhel9-arm64-us-east-1"
+                }
+              }
+            }
+          },
+          "rhel-coreos-extensions": {}
+        }
+      }
+    }
+  streams: |
+    {
+      "rhel-9": {
+        "stream": "rhcos-4.21",
+        "architectures": {
+          "x86_64": {
+            "artifacts": {},
+            "images": {
+              "aws": {
+                "regions": {
+                  "us-east-1": {
+                    "release": "421.97.202505081234-0",
+                    "image": "ami-rhel9-us-east-1"
+                  },
+                  "us-west-2": {
+                    "release": "421.97.202505081234-0",
+                    "image": "ami-rhel9-us-west-2"
+                  }
+                }
+              },
+              "gcp": {
+                "project": "rhcos-cloud",
+                "name": "rhcos-421-97-rhel9-x86-64",
+                "family": "rhcos-4-21"
+              }
+            },
+            "rhel-coreos-extensions": {
+              "azure-disk": {
+                "release": "421.97.202505081234-0",
+                "url": "https://example.com/rhcos-rhel9.vhd"
+              }
+            }
+          },
+          "aarch64": {
+            "artifacts": {},
+            "images": {
+              "aws": {
+                "regions": {
+                  "us-east-1": {
+                    "release": "421.97.202505081234-0",
+                    "image": "ami-rhel9-arm64-us-east-1"
+                  }
+                }
+              }
+            },
+            "rhel-coreos-extensions": {}
+          }
+        }
+      },
+      "rhel-10": {
+        "stream": "rhcos-5.0",
+        "architectures": {
+          "x86_64": {
+            "artifacts": {},
+            "images": {
+              "aws": {
+                "regions": {
+                  "us-east-1": {
+                    "release": "510.97.202505081234-0",
+                    "image": "ami-rhel10-us-east-1"
+                  },
+                  "us-west-2": {
+                    "release": "510.97.202505081234-0",
+                    "image": "ami-rhel10-us-west-2"
+                  }
+                }
+              },
+              "gcp": {
+                "project": "rhcos-cloud",
+                "name": "rhcos-510-97-rhel10-x86-64",
+                "family": "rhcos-5-0"
+              }
+            },
+            "rhel-coreos-extensions": {
+              "azure-disk": {
+                "release": "510.97.202505081234-0",
+                "url": "https://example.com/rhcos-rhel10.vhd"
+              }
+            }
+          },
+          "aarch64": {
+            "artifacts": {},
+            "images": {
+              "aws": {
+                "regions": {
+                  "us-east-1": {
+                    "release": "510.97.202505081234-0",
+                    "image": "ami-rhel10-arm64-us-east-1"
+                  }
+                }
+              }
+            },
+            "rhel-coreos-extensions": {}
+          }
+        }
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: coreos-bootimages
+  namespace: openshift-machine-config-operator
