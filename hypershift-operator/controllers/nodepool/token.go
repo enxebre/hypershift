@@ -42,6 +42,7 @@ const (
 	TokenSecretHCConfigurationHashKey    = "hc-configuration-hash"
 	TokenSecretAdditionalTrustBundleKey  = "additional-trust-bundle-hash"
 	TokenSecretConfigKey                 = "config"
+	TokenSecretOSStreamKey               = "os-stream"
 	TokenSecretAnnotation                = "hypershift.openshift.io/ignition-config"
 	TokenSecretIgnitionReachedAnnotation = "hypershift.openshift.io/ignition-reached"
 	TokenSecretNodePoolUpgradeType       = "hypershift.openshift.io/node-pool-upgrade-type"
@@ -62,6 +63,9 @@ type Token struct {
 	additionalTrustBundleHash []byte
 	globalConfigHash          []byte
 	userData                  *userData
+	// resolvedRHELStream is the fully resolved RHEL stream (explicit or auto-detected).
+	// Written to the token secret so the ignition server can use it.
+	resolvedRHELStream hyperv1.OSImageStreamName
 }
 
 // userData contains the input necessary to generate the user data secret
@@ -113,6 +117,15 @@ func NewToken(ctx context.Context, configGenerator *ConfigGenerator, cpoCapabili
 		return nil, fmt.Errorf("failed to hash HostedCluster configuration: %w", err)
 	}
 
+	// Resolve the RHEL OS image stream.
+	// We detect runc usage from the user-supplied configs to determine compatibility
+	// with RHEL 10 (which does not ship runc).
+	usesRunc := configUsesRunc(extractUserConfigStrings(ctx, configGenerator))
+	resolvedStream, err := getRHELStream(configGenerator.nodePool.Spec.OSImageStream.Name, configGenerator.releaseImage.Version(), usesRunc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve RHEL stream: %w", err)
+	}
+
 	token := &Token{
 		CreateOrUpdateProvider:    upsert.New(false),
 		ConfigGenerator:           configGenerator,
@@ -120,6 +133,7 @@ func NewToken(ctx context.Context, configGenerator *ConfigGenerator, cpoCapabili
 		pullSecretHash:            []byte(supportutil.HashSimple(pullSecretBytes)),
 		additionalTrustBundleHash: []byte(supportutil.HashSimple(additionalTrustBundle)),
 		globalConfigHash:          []byte(hcConfigurationHash),
+		resolvedRHELStream:        resolvedStream,
 	}
 
 	// User data input.
@@ -354,6 +368,12 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 		tokenSecret.Data[TokenSecretPullSecretHashKey] = t.pullSecretHash
 		tokenSecret.Data[TokenSecretAdditionalTrustBundleKey] = t.additionalTrustBundleHash
 		tokenSecret.Data[TokenSecretHCConfigurationHashKey] = t.globalConfigHash
+
+		// Write the resolved RHEL stream so the ignition server can generate the
+		// appropriate OSImageStream CR in the ignition payload.
+		if t.resolvedRHELStream != "" {
+			tokenSecret.Data[TokenSecretOSStreamKey] = []byte(t.resolvedRHELStream)
+		}
 	}
 	// TODO (alberto): Only apply this on creation and change the hash generation to only use triggering upgrade fields.
 	// We let this change to happen inplace now as the tokenSecret and the mcs config use the whole spec.Config for the comparing hash.

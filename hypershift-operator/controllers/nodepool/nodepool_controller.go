@@ -371,6 +371,13 @@ func (r *NodePoolReconciler) reconcile(ctx context.Context, hcluster *hyperv1.Ho
 		return ctrl.Result{}, fmt.Errorf("failed to create token: %w", err)
 	}
 
+	// Report the resolved RHEL OS image stream in status.
+	if token.resolvedRHELStream != "" {
+		nodePool.Status.OSImageStream = hyperv1.OSImageStreamReference{
+			Name: token.resolvedRHELStream,
+		}
+	}
+
 	// Only reconcile NTO if NodeTuning capability is enabled
 	if capabilities.IsNodeTuningCapabilityEnabled(hcluster.Spec.Capabilities) {
 		if err := r.ntoReconcile(ctx, nodePool, configGenerator, controlPlaneNamespace); err != nil {

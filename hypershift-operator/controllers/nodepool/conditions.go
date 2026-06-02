@@ -374,7 +374,7 @@ func (r *NodePoolReconciler) validMachineConfigCondition(ctx context.Context, no
 	}
 
 	controlPlaneNamespace := manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name)
-	_, err = NewConfigGenerator(ctx, r.Client, hcluster, nodePool, releaseImage, haproxyRawConfig, controlPlaneNamespace)
+	configGenerator, err := NewConfigGenerator(ctx, r.Client, hcluster, nodePool, releaseImage, haproxyRawConfig, controlPlaneNamespace)
 	if err != nil {
 		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
 			Type:               hyperv1.NodePoolValidMachineConfigConditionType,
@@ -385,6 +385,20 @@ func (r *NodePoolReconciler) validMachineConfigCondition(ctx context.Context, no
 		})
 		return &ctrl.Result{}, fmt.Errorf("failed to generate config: %w", err)
 	}
+
+	// Validate RHEL stream compatibility with the user-supplied config.
+	usesRunc := configUsesRunc(extractUserConfigStrings(ctx, configGenerator))
+	if _, err := getRHELStream(nodePool.Spec.OSImageStream.Name, releaseImage.Version(), usesRunc); err != nil {
+		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
+			Type:               hyperv1.NodePoolValidMachineConfigConditionType,
+			Status:             corev1.ConditionFalse,
+			Reason:             hyperv1.NodePoolValidationFailedReason,
+			Message:            err.Error(),
+			ObservedGeneration: nodePool.Generation,
+		})
+		return &ctrl.Result{}, fmt.Errorf("failed to validate RHEL stream: %w", err)
+	}
+
 	SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
 		Type:               hyperv1.NodePoolValidMachineConfigConditionType,
 		Status:             corev1.ConditionTrue,

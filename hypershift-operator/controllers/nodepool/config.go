@@ -59,6 +59,10 @@ type rolloutConfig struct {
 	// TODO(alberto): consider let haproxyRawConfig be an implementation detail of ConfigGenerator.
 	// For now, it's a required input to keep the haproxy business logic and files outside the scope of this initial refactor.
 	haproxyRawConfig string
+	// rhelStream is the explicit OS image stream from spec.osImageStream.name.
+	// Only set from the explicit user-supplied value, never from the auto-resolved value,
+	// so that changes to auto-detection logic don't trigger rollouts for existing clusters.
+	rhelStream string
 }
 
 // NewConfigGenerator is the contract to create a new ConfigGenerator.
@@ -86,6 +90,9 @@ func NewConfigGenerator(ctx context.Context, client client.Client, hostedCluster
 			pullSecretName:   hostedCluster.Spec.PullSecret.Name,
 			globalConfig:     globalConfig,
 			haproxyRawConfig: haproxyRawConfig,
+			// Only store the explicit user-supplied value so auto-detection changes
+			// do not trigger unnecessary rollouts.
+			rhelStream: string(nodePool.Spec.OSImageStream.Name),
 		},
 	}
 
@@ -117,7 +124,7 @@ func (cg *ConfigGenerator) CompressedAndEncoded() (*bytes.Buffer, error) {
 // TODO(alberto): hash the struct directly instead of the string representation field by field.
 // This is kept like this for now to contain the scope of the refactor and avoid backward compatibility issues.
 func (cg *ConfigGenerator) Hash() string {
-	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig)
+	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig + cg.rhelStream)
 }
 
 // HashWithOutVersion is like Hash but doesn't compute the release version.

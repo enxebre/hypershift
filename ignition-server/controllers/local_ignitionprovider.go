@@ -607,7 +607,7 @@ func (p *LocalIgnitionProvider) runMCSAndFetchPayload(ctx context.Context, dirs 
 	return payload, err
 }
 
-func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, customConfig, pullSecretHash, additionalTrustBundleHash, hcConfigurationHash string) ([]byte, error) {
+func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, customConfig, pullSecretHash, additionalTrustBundleHash, hcConfigurationHash, osStream string) ([]byte, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -741,6 +741,14 @@ func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, cu
 		return nil, fmt.Errorf("failed to execute machine-config-operator: %w", err)
 	}
 
+	// If an OS stream is specified, inject the OSImageStream CR into the mccDir
+	// so the MCC includes it in the ignition payload.
+	if osStream != "" {
+		if err := writeOSImageStreamCR(dirs.mccDir, osStream); err != nil {
+			return nil, fmt.Errorf("failed to write OSImageStream CR: %w", err)
+		}
+	}
+
 	// Next, run the MCC using templates and MCO output as input, producing output for the MCS.
 	if err := p.runMCC(ctx, dirs, imageProvider, payloadVersion); err != nil {
 		return nil, fmt.Errorf("failed to execute machine-config-controller: %w", err)
@@ -753,6 +761,21 @@ func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, cu
 	}
 
 	return payload, nil
+}
+
+// writeOSImageStreamCR writes a 99_osimagestream.yaml manifest into the mccDir.
+// The MCC processes all manifests in the mccDir, so this CR will be included in the
+// ignition payload served to nodes. The CR is a simple custom resource that signals
+// the desired RHEL OS image stream to downstream MCO bootstrap logic.
+func writeOSImageStreamCR(mccDir, osStream string) error {
+	manifest := fmt.Sprintf(`apiVersion: machineconfiguration.openshift.io/v1alpha1
+kind: OSImageStream
+metadata:
+  name: cluster
+spec:
+  stream: %s
+`, osStream)
+	return os.WriteFile(filepath.Join(mccDir, "99_osimagestream.yaml"), []byte(manifest), 0644)
 }
 
 func (r *LocalIgnitionProvider) reconcileValidReleaseInfoCondition(ctx context.Context, releaseImageProvider *imageprovider.SimpleReleaseImageProvider) error {
