@@ -35349,6 +35349,26 @@ Changing this field will trigger a NodePool rollout.</p>
 </tr>
 <tr>
 <td>
+<code>osImageStream,omitempty,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.OSImageStreamReference">
+OSImageStreamReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>osImageStream selects the RHEL OS image stream for nodes in this NodePool.
+When set, this controls which RHEL version (e.g. RHEL 9 or RHEL 10) is used
+as the base operating system for worker nodes. Once set to &ldquo;rhel-10&rdquo;, it cannot
+be downgraded back to &ldquo;rhel-9&rdquo;.</p>
+<p>When unset, the controller will automatically select the appropriate stream
+based on the release image version and container runtime configuration.</p>
+<p>Changing this field triggers a NodePool rollout.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>arch</code></br>
 <em>
 string
@@ -47380,6 +47400,26 @@ Changing this field will trigger a NodePool rollout.</p>
 </tr>
 <tr>
 <td>
+<code>osImageStream,omitempty,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.OSImageStreamReference">
+OSImageStreamReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>osImageStream selects the RHEL OS image stream for nodes in this NodePool.
+When set, this controls which RHEL version (e.g. RHEL 9 or RHEL 10) is used
+as the base operating system for worker nodes. Once set to &ldquo;rhel-10&rdquo;, it cannot
+be downgraded back to &ldquo;rhel-9&rdquo;.</p>
+<p>When unset, the controller will automatically select the appropriate stream
+based on the release image version and container runtime configuration.</p>
+<p>Changing this field triggers a NodePool rollout.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>arch</code></br>
 <em>
 string
@@ -47433,6 +47473,22 @@ string
 <em>(Optional)</em>
 <p>version is the semantic version of the latest applied release specified by
 the NodePool.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>osImageStream,omitempty,omitzero</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.OSImageStreamReference">
+OSImageStreamReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>osImageStream is the resolved RHEL OS image stream for this NodePool.
+It reflects the OS stream that nodes are actually running, either as
+explicitly set in spec.osImageStream or as resolved by the controller.</p>
 </td>
 </tr>
 <tr>
@@ -47615,6 +47671,64 @@ the guest cluster.</p>
 the management cluster.</p>
 </td>
 </tr></tbody>
+</table>
+###OSImageStreamName { #hypershift.openshift.io/v1beta1.OSImageStreamName }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.OSImageStreamReference">OSImageStreamReference</a>)
+</p>
+<p>
+<p>OSImageStreamName is a type for specifying the RHEL OS image stream for a NodePool.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr><td><p>&#34;rhel-10&#34;</p></td>
+<td><p>OSImageStreamRHEL10 selects the RHEL 10 CoreOS image stream.</p>
+</td>
+</tr><tr><td><p>&#34;rhel-9&#34;</p></td>
+<td><p>OSImageStreamRHEL9 selects the RHEL 9 CoreOS image stream.</p>
+</td>
+</tr></tbody>
+</table>
+###OSImageStreamReference { #hypershift.openshift.io/v1beta1.OSImageStreamReference }
+<p>
+(<em>Appears on:</em>
+<a href="#hypershift.openshift.io/v1beta1.NodePoolSpec">NodePoolSpec</a>, 
+<a href="#hypershift.openshift.io/v1beta1.NodePoolStatus">NodePoolStatus</a>)
+</p>
+<p>
+<p>OSImageStreamReference specifies the RHEL OS image stream to use for nodes in a NodePool.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+<a href="#hypershift.openshift.io/v1beta1.OSImageStreamName">
+OSImageStreamName
+</a>
+</em>
+</td>
+<td>
+<p>name is the RHEL OS image stream identifier.
+Supported values are &ldquo;rhel-9&rdquo; and &ldquo;rhel-10&rdquo;.
+When set to &ldquo;rhel-10&rdquo;, the NodePool must not use the runc container runtime,
+and the release image must be 5.0 or later.</p>
+</td>
+</tr>
+</tbody>
 </table>
 ###OVNIPv4Config { #hypershift.openshift.io/v1beta1.OVNIPv4Config }
 <p>

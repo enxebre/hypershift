@@ -20,11 +20,12 @@ package v1beta1
 // NodePoolStatusApplyConfiguration represents a declarative configuration of the NodePoolStatus type for use
 // with apply.
 type NodePoolStatusApplyConfiguration struct {
-	Replicas   *int32                                    `json:"replicas,omitempty"`
-	Version    *string                                   `json:"version,omitempty"`
-	NodesInfo  *NodePoolNodesInfoApplyConfiguration      `json:"nodesInfo,omitempty"`
-	Platform   *NodePoolPlatformStatusApplyConfiguration `json:"platform,omitempty"`
-	Conditions []NodePoolConditionApplyConfiguration     `json:"conditions,omitempty"`
+	Replicas      *int32                                    `json:"replicas,omitempty"`
+	Version       *string                                   `json:"version,omitempty"`
+	OSImageStream *OSImageStreamReferenceApplyConfiguration `json:"osImageStream,omitempty"`
+	NodesInfo     *NodePoolNodesInfoApplyConfiguration      `json:"nodesInfo,omitempty"`
+	Platform      *NodePoolPlatformStatusApplyConfiguration `json:"platform,omitempty"`
+	Conditions    []NodePoolConditionApplyConfiguration     `json:"conditions,omitempty"`
 }
 
 // NodePoolStatusApplyConfiguration constructs a declarative configuration of the NodePoolStatus type for use with
@@ -46,6 +47,14 @@ func (b *NodePoolStatusApplyConfiguration) WithReplicas(value int32) *NodePoolSt
 // If called multiple times, the Version field is set to the value of the last call.
 func (b *NodePoolStatusApplyConfiguration) WithVersion(value string) *NodePoolStatusApplyConfiguration {
 	b.Version = &value
+	return b
+}
+
+// WithOSImageStream sets the OSImageStream field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the OSImageStream field is set to the value of the last call.
+func (b *NodePoolStatusApplyConfiguration) WithOSImageStream(value *OSImageStreamReferenceApplyConfiguration) *NodePoolStatusApplyConfiguration {
+	b.OSImageStream = value
 	return b
 }
 

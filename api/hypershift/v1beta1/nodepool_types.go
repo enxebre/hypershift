@@ -100,6 +100,29 @@ type NodePool struct {
 	Status NodePoolStatus `json:"status,omitempty"`
 }
 
+// OSImageStreamName is a type for specifying the RHEL OS image stream for a NodePool.
+// +kubebuilder:validation:Enum=rhel-9;rhel-10
+type OSImageStreamName string
+
+const (
+	// OSImageStreamRHEL9 selects the RHEL 9 CoreOS image stream.
+	OSImageStreamRHEL9 OSImageStreamName = "rhel-9"
+	// OSImageStreamRHEL10 selects the RHEL 10 CoreOS image stream.
+	OSImageStreamRHEL10 OSImageStreamName = "rhel-10"
+)
+
+// OSImageStreamReference specifies the RHEL OS image stream to use for nodes in a NodePool.
+type OSImageStreamReference struct {
+	// name is the RHEL OS image stream identifier.
+	// Supported values are "rhel-9" and "rhel-10".
+	// When set to "rhel-10", the NodePool must not use the runc container runtime,
+	// and the release image must be 5.0 or later.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=64
+	Name OSImageStreamName `json:"name,omitempty"`
+}
+
 // NodePoolSpec is the desired behavior of a NodePool.
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.arch) || has(self.arch)", message="Arch is required once set"
 // +kubebuilder:validation:XValidation:rule="self.arch != 'arm64' || has(self.platform.aws) || has(self.platform.azure) || has(self.platform.agent) || self.platform.type == 'GCP' || self.platform.type == 'None'", message="Setting Arch to arm64 is only supported for AWS, Azure, Agent, GCP and None"
@@ -107,6 +130,7 @@ type NodePool struct {
 // +kubebuilder:validation:XValidation:rule="self.arch != 's390x' || has(self.platform.kubevirt)", message="s390x is only supported on KubeVirt platform"
 // +kubebuilder:validation:XValidation:rule="!has(self.platform.aws) || !has(self.platform.aws.imageType) || self.platform.aws.imageType != 'Windows' || self.arch == 'amd64'", message="ImageType 'Windows' requires arch 'amd64' (AWS only)"
 // +kubebuilder:validation:XValidation:rule="!has(self.autoScaling) || self.autoScaling.min > 0 || self.platform.type == 'AWS'", message="Scale-from-zero (autoScaling.min=0) is currently only supported for AWS platform"
+// +kubebuilder:validation:XValidation:rule="!has(self.osImageStream) || !has(oldSelf.osImageStream) || !(oldSelf.osImageStream.name == 'rhel-10' && self.osImageStream.name == 'rhel-9')", message="Downgrading osImageStream from rhel-10 to rhel-9 is not allowed"
 type NodePoolSpec struct {
 	// clusterName is the name of the HostedCluster this NodePool belongs to.
 	// If a HostedCluster with this name doesn't exist, the controller will no-op until it exists.
@@ -229,6 +253,20 @@ type NodePoolSpec struct {
 	// +kubebuilder:validation:MaxItems=10
 	TuningConfig []corev1.LocalObjectReference `json:"tuningConfig,omitempty"`
 
+	// osImageStream selects the RHEL OS image stream for nodes in this NodePool.
+	// When set, this controls which RHEL version (e.g. RHEL 9 or RHEL 10) is used
+	// as the base operating system for worker nodes. Once set to "rhel-10", it cannot
+	// be downgraded back to "rhel-9".
+	//
+	// When unset, the controller will automatically select the appropriate stream
+	// based on the release image version and container runtime configuration.
+	//
+	// Changing this field triggers a NodePool rollout.
+	// +rollout
+	// +openshift:enable:FeatureGate=OSStreams
+	// +optional
+	OSImageStream OSImageStreamReference `json:"osImageStream,omitempty,omitzero"`
+
 	// arch is the preferred processor architecture for the NodePool. Different platforms might have different supported architectures.
 	// TODO: This is set as optional to prevent validation from failing due to a limitation on client side validation with open API machinery:
 	//	https://github.com/kubernetes/kubernetes/issues/108768#issuecomment-1253912215
@@ -253,6 +291,13 @@ type NodePoolStatus struct {
 	// +optional
 	// +kubebuilder:validation:MaxLength=64
 	Version string `json:"version,omitempty"`
+
+	// osImageStream is the resolved RHEL OS image stream for this NodePool.
+	// It reflects the OS stream that nodes are actually running, either as
+	// explicitly set in spec.osImageStream or as resolved by the controller.
+	// +openshift:enable:FeatureGate=OSStreams
+	// +optional
+	OSImageStream OSImageStreamReference `json:"osImageStream,omitempty,omitzero"`
 
 	// nodesInfo contains aggregated information observed from nodes belonging
 	// to this NodePool.
