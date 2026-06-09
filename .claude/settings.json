@@ -1,0 +1,6 @@
+{
+  "plugins": {
+    "marketplaces": ["enxebre/ai-scripts"],
+    "enabled": ["git@ai-scripts"]
+  }
+}
