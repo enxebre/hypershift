@@ -303,6 +303,128 @@ func TestSetNodesInfoStatus(t *testing.T) {
 	}
 }
 
+func TestDetectRHELStreamFromOSImage(t *testing.T) {
+	tests := []struct {
+		name     string
+		osImage  string
+		expected string
+	}{
+		{
+			name:     "When OS image is RHCOS 419 it should return rhel-9",
+			osImage:  "Red Hat Enterprise Linux CoreOS 419.97.202505081234-0 (Plow)",
+			expected: "rhel-9",
+		},
+		{
+			name:     "When OS image is RHCOS 510 it should return rhel-10",
+			osImage:  "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)",
+			expected: "rhel-10",
+		},
+		{
+			name:     "When OS image is RHCOS 421 it should return rhel-9",
+			osImage:  "Red Hat Enterprise Linux CoreOS 421.94.202505081234-0 (Plow)",
+			expected: "rhel-9",
+		},
+		{
+			name:     "When OS image is empty it should return empty string",
+			osImage:  "",
+			expected: "",
+		},
+		{
+			name:     "When OS image has no CoreOS prefix it should return empty string",
+			osImage:  "Ubuntu 22.04",
+			expected: "",
+		},
+		{
+			name:     "When OS image is RHCOS with version below 400 it should return empty string",
+			osImage:  "Red Hat Enterprise Linux CoreOS 399.97.202505081234-0 (Plow)",
+			expected: "",
+		},
+		{
+			name:     "When OS image is RHCOS with version 500 it should return rhel-10",
+			osImage:  "Red Hat Enterprise Linux CoreOS 500.97.202505081234-0 (Plow)",
+			expected: "rhel-10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			result := detectRHELStreamFromOSImage(tt.osImage)
+			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
+func TestOsImageStreamFromMachines(t *testing.T) {
+	tests := []struct {
+		name     string
+		machines []*v1beta1.Machine
+		expected string
+	}{
+		{
+			name:     "When no machines exist it should return empty string",
+			machines: nil,
+			expected: "",
+		},
+		{
+			name: "When all machines report RHEL 9 it should return rhel-9",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 419.97.202505081234-0 (Plow)"}}},
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 419.97.202505081234-0 (Plow)"}}},
+			},
+			expected: "rhel-9",
+		},
+		{
+			name: "When all machines report RHEL 10 it should return rhel-10",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)"}}},
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)"}}},
+			},
+			expected: "rhel-10",
+		},
+		{
+			name: "When machines are split evenly it should return empty string",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 419.97.202505081234-0 (Plow)"}}},
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)"}}},
+			},
+			expected: "",
+		},
+		{
+			name: "When majority is RHEL 10 it should return rhel-10",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)"}}},
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 510.97.202505081234-0 (Plow)"}}},
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: "Red Hat Enterprise Linux CoreOS 419.97.202505081234-0 (Plow)"}}},
+			},
+			expected: "rhel-10",
+		},
+		{
+			name: "When machines have no NodeInfo it should return empty string",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: nil}},
+				{Status: v1beta1.MachineStatus{NodeInfo: nil}},
+			},
+			expected: "",
+		},
+		{
+			name: "When machines have empty OSImage it should return empty string",
+			machines: []*v1beta1.Machine{
+				{Status: v1beta1.MachineStatus{NodeInfo: &corev1.NodeSystemInfo{OSImage: ""}}},
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			result := osImageStreamFromMachines(tt.machines)
+			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
 func machineWithVersionAndHealth(name, kubeletVersion string, healthy bool, annotations map[string]string) *v1beta1.Machine {
 	healthStatus := corev1.ConditionTrue
 	if !healthy {

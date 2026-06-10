@@ -1388,3 +1388,43 @@ func TestCopyMCOOutputToMCCMixedContent(t *testing.T) {
 		g.Expect(os.IsNotExist(err)).To(BeTrue())
 	})
 }
+
+func TestWriteOSImageStreamManifest(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		osStream       string
+		expectedInFile string
+	}{
+		{
+			name:           "When stream is rhel-10 it should write correct manifest",
+			osStream:       "rhel-10",
+			expectedInFile: `defaultStream: "rhel-10"`,
+		},
+		{
+			name:           "When stream is rhel-9 it should write correct manifest",
+			osStream:       "rhel-9",
+			expectedInFile: `defaultStream: "rhel-9"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+			tmpDir := t.TempDir()
+
+			err := writeOSImageStreamManifest(tmpDir, tt.osStream)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			content, err := os.ReadFile(filepath.Join(tmpDir, "99_osimagestream.yaml"))
+			g.Expect(err).NotTo(HaveOccurred())
+
+			g.Expect(string(content)).To(ContainSubstring(tt.expectedInFile))
+			g.Expect(string(content)).To(ContainSubstring("kind: OSImageStream"))
+			g.Expect(string(content)).To(ContainSubstring("name: cluster"))
+			g.Expect(string(content)).To(ContainSubstring("apiVersion: machineconfiguration.openshift.io/v1alpha1"))
+		})
+	}
+}
