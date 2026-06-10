@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/blang/semver"
 	"github.com/clarketm/json"
 	ignitionapi "github.com/coreos/ignition/v2/config/v3_2/types"
 	"github.com/go-logr/logr"
@@ -45,6 +46,7 @@ const (
 	TokenSecretAnnotation                = "hypershift.openshift.io/ignition-config"
 	TokenSecretIgnitionReachedAnnotation = "hypershift.openshift.io/ignition-reached"
 	TokenSecretNodePoolUpgradeType       = "hypershift.openshift.io/node-pool-upgrade-type"
+	TokenSecretOSStreamKey               = "os-stream"
 )
 
 // Token knows how to create an UUUID token for a unique configGenerator Hash.
@@ -61,6 +63,7 @@ type Token struct {
 	pullSecretHash            []byte
 	additionalTrustBundleHash []byte
 	globalConfigHash          []byte
+	rhelStream                string
 	userData                  *userData
 }
 
@@ -120,6 +123,19 @@ func NewToken(ctx context.Context, configGenerator *ConfigGenerator, cpoCapabili
 		pullSecretHash:            []byte(supportutil.HashSimple(pullSecretBytes)),
 		additionalTrustBundleHash: []byte(supportutil.HashSimple(additionalTrustBundle)),
 		globalConfigHash:          []byte(hcConfigurationHash),
+	}
+
+	// Resolve RHEL stream for dual-stream support.
+	if configGenerator.rolloutConfig != nil && configGenerator.releaseImage != nil {
+		releaseVersion, err := semver.ParseTolerant(configGenerator.releaseImage.Version())
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse release version %q: %w", configGenerator.releaseImage.Version(), err)
+		}
+		stream, err := getRHELStream(configGenerator.nodePool.Spec.OSImageStream.Name, releaseVersion, configGenerator.usesRunc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve RHEL stream: %w", err)
+		}
+		token.rhelStream = stream
 	}
 
 	// User data input.
@@ -354,6 +370,10 @@ func (t *Token) reconcileTokenSecret(tokenSecret *corev1.Secret) error {
 		tokenSecret.Data[TokenSecretPullSecretHashKey] = t.pullSecretHash
 		tokenSecret.Data[TokenSecretAdditionalTrustBundleKey] = t.additionalTrustBundleHash
 		tokenSecret.Data[TokenSecretHCConfigurationHashKey] = t.globalConfigHash
+
+		if t.rhelStream != "" {
+			tokenSecret.Data[TokenSecretOSStreamKey] = []byte(t.rhelStream)
+		}
 	}
 	// TODO (alberto): Only apply this on creation and change the hash generation to only use triggering upgrade fields.
 	// We let this change to happen inplace now as the tokenSecret and the mcs config use the whole spec.Config for the comparing hash.

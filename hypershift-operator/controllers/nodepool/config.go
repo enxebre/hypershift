@@ -42,6 +42,7 @@ type ConfigGenerator struct {
 	hostedCluster         *hyperv1.HostedCluster
 	nodePool              *hyperv1.NodePool
 	controlplaneNamespace string
+	usesRunc              bool
 	*rolloutConfig
 }
 
@@ -60,6 +61,9 @@ type rolloutConfig struct {
 	// TODO(alberto): consider let haproxyRawConfig be an implementation detail of ConfigGenerator.
 	// For now, it's a required input to keep the haproxy business logic and files outside the scope of this initial refactor.
 	haproxyRawConfig string
+	// rhelStream is set only when the user explicitly sets spec.osImageStream.name.
+	// Implicit streams leave this as "" to avoid changing the hash.
+	rhelStream string
 }
 
 // NewConfigGenerator is the contract to create a new ConfigGenerator.
@@ -94,6 +98,11 @@ func NewConfigGenerator(ctx context.Context, client client.Client, hostedCluster
 		cg.rolloutConfig.additionalTrustBundleName = hostedCluster.Spec.AdditionalTrustBundle.Name
 	}
 
+	// rhelStream is populated directly from spec.osImageStream.name (empty when unset).
+	// Using the resolved value from getRHELStream() would inject implicit defaults into
+	// the hash, triggering fleet-wide rollouts on upgrade.
+	cg.rolloutConfig.rhelStream = nodePool.Spec.OSImageStream.Name
+
 	mcoRawConfig, err := cg.generateMCORawConfig(ctx, hostedCluster.Spec.Capabilities)
 	if err != nil {
 		return nil, err
@@ -118,7 +127,7 @@ func (cg *ConfigGenerator) CompressedAndEncoded() (*bytes.Buffer, error) {
 // TODO(alberto): hash the struct directly instead of the string representation field by field.
 // This is kept like this for now to contain the scope of the refactor and avoid backward compatibility issues.
 func (cg *ConfigGenerator) Hash() string {
-	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig)
+	return supportutil.HashSimple(cg.mcoRawConfig + cg.releaseImage.Version() + cg.pullSecretName + cg.additionalTrustBundleName + cg.globalConfig + cg.rhelStream)
 }
 
 // HashWithOutVersion is like Hash but doesn't compute the release version.
@@ -126,7 +135,7 @@ func (cg *ConfigGenerator) Hash() string {
 // TODO(alberto): This was left inconsistent in https://github.com/openshift/hypershift/pull/3795/files. It should also contain cg.globalConfig.
 // This is kept like this for now to contain the scope of the refactor and avoid backward compatibility issues.
 func (cg *ConfigGenerator) HashWithoutVersion() string {
-	return supportutil.HashSimple(cg.mcoRawConfig + cg.pullSecretName + cg.additionalTrustBundleName)
+	return supportutil.HashSimple(cg.mcoRawConfig + cg.pullSecretName + cg.additionalTrustBundleName + cg.rhelStream)
 }
 
 func (cg *ConfigGenerator) Version() string {
@@ -308,6 +317,11 @@ func (cg *ConfigGenerator) defaultAndValidateConfigManifest(manifest []byte) ([]
 			return nil, fmt.Errorf("failed to encode kubelet config after setting built-in MCP selector: %w", err)
 		}
 	case *mcfgv1.ContainerRuntimeConfig:
+		// Detect runc usage for dual-stream RHEL compatibility
+		if obj.Spec.ContainerRuntimeConfig != nil &&
+			obj.Spec.ContainerRuntimeConfig.DefaultRuntime == mcfgv1.ContainerRuntimeDefaultRuntimeRunc {
+			cg.usesRunc = true
+		}
 		obj.Spec.MachineConfigPoolSelector = &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"machineconfiguration.openshift.io/mco-built-in": "",

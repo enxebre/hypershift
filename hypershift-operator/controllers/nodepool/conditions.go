@@ -374,7 +374,7 @@ func (r *NodePoolReconciler) validMachineConfigCondition(ctx context.Context, no
 	}
 
 	controlPlaneNamespace := manifests.HostedControlPlaneNamespace(hcluster.Namespace, hcluster.Name)
-	_, err = NewConfigGenerator(ctx, r.Client, hcluster, nodePool, releaseImage, haproxyRawConfig, controlPlaneNamespace)
+	configGenerator, err := NewConfigGenerator(ctx, r.Client, hcluster, nodePool, releaseImage, haproxyRawConfig, controlPlaneNamespace)
 	if err != nil {
 		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
 			Type:               hyperv1.NodePoolValidMachineConfigConditionType,
@@ -385,6 +385,35 @@ func (r *NodePoolReconciler) validMachineConfigCondition(ctx context.Context, no
 		})
 		return &ctrl.Result{}, fmt.Errorf("failed to generate config: %w", err)
 	}
+
+	// Validate RHEL stream compatibility.
+	releaseVersion, err := semver.ParseTolerant(releaseImage.Version())
+	if err != nil {
+		return &ctrl.Result{}, fmt.Errorf("failed to parse release version: %w", err)
+	}
+	stream, streamErr := getRHELStream(nodePool.Spec.OSImageStream.Name, releaseVersion, configGenerator.usesRunc)
+	if streamErr != nil {
+		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
+			Type:               hyperv1.NodePoolValidMachineConfigConditionType,
+			Status:             corev1.ConditionFalse,
+			Reason:             hyperv1.NodePoolValidationFailedReason,
+			Message:            streamErr.Error(),
+			ObservedGeneration: nodePool.Generation,
+		})
+		return &ctrl.Result{}, fmt.Errorf("invalid RHEL stream configuration: %w", streamErr)
+	}
+	// Informational message when stream falls back to rhel-9 due to runc.
+	if nodePool.Spec.OSImageStream.Name == "" && stream == rhelStreamRHEL9 {
+		SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
+			Type:               hyperv1.NodePoolValidMachineConfigConditionType,
+			Status:             corev1.ConditionTrue,
+			Reason:             hyperv1.AsExpectedReason,
+			Message:            "OS stream defaulted to rhel-9: RHEL 10 is incompatible with default_runtime=runc",
+			ObservedGeneration: nodePool.Generation,
+		})
+		return nil, nil
+	}
+
 	SetStatusCondition(&nodePool.Status.Conditions, hyperv1.NodePoolCondition{
 		Type:               hyperv1.NodePoolValidMachineConfigConditionType,
 		Status:             corev1.ConditionTrue,
