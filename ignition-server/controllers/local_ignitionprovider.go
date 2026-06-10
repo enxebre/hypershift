@@ -607,7 +607,8 @@ func (p *LocalIgnitionProvider) runMCSAndFetchPayload(ctx context.Context, dirs 
 	return payload, err
 }
 
-func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, customConfig, pullSecretHash, additionalTrustBundleHash, hcConfigurationHash string) ([]byte, error) {
+//nolint:gocyclo
+func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, customConfig, pullSecretHash, additionalTrustBundleHash, hcConfigurationHash, osStream string) ([]byte, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -739,6 +740,16 @@ func (p *LocalIgnitionProvider) GetPayload(ctx context.Context, releaseImage, cu
 	// First, run the MCO using templates and image refs as input. This generates output for the MCC.
 	if err := p.runMCO(ctx, dirs, releaseImage, pullSecret, mcsConfig, imageProvider, payloadVersion); err != nil {
 		return nil, fmt.Errorf("failed to execute machine-config-operator: %w", err)
+	}
+
+	// Write OSImageStream CR for dual-stream RHEL support.
+	// When osStream is non-empty, the MCC bootstrap will use this to select the
+	// correct stream's container image for MachineConfig osImageURL.
+	if osStream != "" {
+		if err := writeOSImageStreamManifest(dirs.mccDir, osStream); err != nil {
+			return nil, fmt.Errorf("failed to write OSImageStream manifest: %w", err)
+		}
+		log.Info("wrote OSImageStream manifest", "stream", osStream)
 	}
 
 	// Next, run the MCC using templates and MCO output as input, producing output for the MCS.
@@ -984,4 +995,19 @@ func (p *LocalIgnitionProvider) extractMCOBinaries(ctx context.Context, cpoOSRel
 
 	log.Info("downloaded binaries", "time", time.Since(start).Round(time.Second).String())
 	return nil
+}
+
+// writeOSImageStreamManifest writes an OSImageStream CR manifest to the MCC directory.
+// The MCC bootstrap reads this manifest to determine which RHEL stream's container
+// image to use for the MachineConfig osImageURL.
+func writeOSImageStreamManifest(mccDir, osStream string) error {
+	manifest := fmt.Sprintf(`apiVersion: machineconfiguration.openshift.io/v1alpha1
+kind: OSImageStream
+metadata:
+  name: cluster
+spec:
+  defaultStream: %q
+`, osStream)
+
+	return os.WriteFile(filepath.Join(mccDir, "99_osimagestream.yaml"), []byte(manifest), 0644)
 }
