@@ -133,15 +133,8 @@ func getAzureMarketplaceMetadata(releaseImage *releaseinfo.ReleaseImage, arch st
 	// Extract marketplace metadata from the RHCOS extensions
 	// Structure: .architectures.<arch>.rhel-coreos-extensions.marketplace.azure.no-purchase-plan
 	// Check for nil safety before accessing nested fields
-	if archData.RHELCoreOSExtensions == nil ||
-		archData.RHELCoreOSExtensions.Marketplace == nil ||
-		archData.RHELCoreOSExtensions.Marketplace.Azure == nil ||
-		archData.RHELCoreOSExtensions.Marketplace.Azure.NoPurchasePlan == nil {
-		return nil, nil // No marketplace data available
-	}
-
-	azureMarketplace := archData.RHELCoreOSExtensions.Marketplace.Azure.NoPurchasePlan
-	if azureMarketplace.Gen1 == nil && azureMarketplace.Gen2 == nil {
+	azureMarketplace := archData.RHCOS.Marketplace.Azure.NoPurchasePlan
+	if azureMarketplace.HyperVGen1 == nil && azureMarketplace.HyperVGen2 == nil {
 		return nil, nil // No marketplace data available
 	}
 
@@ -150,22 +143,22 @@ func getAzureMarketplaceMetadata(releaseImage *releaseinfo.ReleaseImage, arch st
 		NoPurchasePlan: &azureMarketplaceImageInfo{},
 	}
 
-	if azureMarketplace.Gen1 != nil {
+	if azureMarketplace.HyperVGen1 != nil {
 		result.NoPurchasePlan.HyperVGen1 = &hyperv1.AzureMarketplaceImage{
-			Publisher:       azureMarketplace.Gen1.Publisher,
-			Offer:           azureMarketplace.Gen1.Offer,
-			SKU:             azureMarketplace.Gen1.SKU,
-			Version:         azureMarketplace.Gen1.Version,
+			Publisher:       azureMarketplace.HyperVGen1.Publisher,
+			Offer:           azureMarketplace.HyperVGen1.Offer,
+			SKU:             azureMarketplace.HyperVGen1.SKU,
+			Version:         azureMarketplace.HyperVGen1.Version,
 			ImageGeneration: ptr.To(hyperv1.Gen1),
 		}
 	}
 
-	if azureMarketplace.Gen2 != nil {
+	if azureMarketplace.HyperVGen2 != nil {
 		result.NoPurchasePlan.HyperVGen2 = &hyperv1.AzureMarketplaceImage{
-			Publisher:       azureMarketplace.Gen2.Publisher,
-			Offer:           azureMarketplace.Gen2.Offer,
-			SKU:             azureMarketplace.Gen2.SKU,
-			Version:         azureMarketplace.Gen2.Version,
+			Publisher:       azureMarketplace.HyperVGen2.Publisher,
+			Offer:           azureMarketplace.HyperVGen2.Offer,
+			SKU:             azureMarketplace.HyperVGen2.SKU,
+			Version:         azureMarketplace.HyperVGen2.Version,
 			ImageGeneration: ptr.To(hyperv1.Gen2),
 		}
 	}

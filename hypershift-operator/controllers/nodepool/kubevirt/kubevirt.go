@@ -50,10 +50,10 @@ func defaultImage(nodePoolArch string, releaseImage *releaseinfo.ReleaseImage) (
 		return "", "", fmt.Errorf("couldn't find OS metadata for architecture %q", archName)
 	}
 
-	if arch.Images.KubeVirt == nil {
+	if arch.Images.Kubevirt.DigestRef == "" {
 		return "", "", fmt.Errorf("no kubevirt image metadata present in release")
 	}
-	containerImage := arch.Images.KubeVirt.DigestRef
+	containerImage := arch.Images.Kubevirt.DigestRef
 	if containerImage == "" {
 		return "", "", fmt.Errorf("no kubevirt vm disk image present in release")
 	}

@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/blang/semver"
-	"github.com/coreos/stream-metadata-go/stream"
 )
 
 // Provider knows how to find the release image metadata for an image referred
@@ -39,7 +38,133 @@ type ProviderWithOpenShiftImageRegistryOverrides interface {
 // discover constituent component image information.
 type ReleaseImage struct {
 	*imageapi.ImageStream `json:",inline"`
-	StreamMetadata        *stream.Stream `json:"streamMetadata"`
+	StreamMetadata        *CoreOSStreamMetadata            `json:"streamMetadata"`
+	StreamsMetadata       map[string]*CoreOSStreamMetadata `json:"streamsMetadata,omitempty"`
+}
+
+// StreamMetadataForStream returns the CoreOSStreamMetadata for the given stream name.
+// If the stream is empty or the multi-stream data is not available, it falls back to
+// the legacy single-stream metadata.
+func (i *ReleaseImage) StreamMetadataForStream(stream string) *CoreOSStreamMetadata {
+	if stream != "" && i.StreamsMetadata != nil {
+		if meta, ok := i.StreamsMetadata[stream]; ok {
+			return meta
+		}
+	}
+	return i.StreamMetadata
+}
+
+type CoreOSStreamMetadata struct {
+	Stream        string                        `json:"stream"`
+	Architectures map[string]CoreOSArchitecture `json:"architectures"`
+}
+
+type CoreOSArchitecture struct {
+	// Artifacts is a map of platform name to Artifacts
+	Artifacts map[string]CoreOSArtifact `json:"artifacts"`
+	Images    CoreOSImages              `json:"images"`
+	RHCOS     CoreRHCOSImage            `json:"rhel-coreos-extensions"`
+}
+
+type CoreOSArtifact struct {
+	Release string                             `json:"release"`
+	Formats map[string]map[string]CoreOSFormat `json:"formats"`
+}
+
+type CoreOSFormat struct {
+	Location           string `json:"location"`
+	Signature          string `json:"signature"`
+	SHA256             string `json:"sha256"`
+	UncompressedSHA256 string `json:"uncompressed-sha256"`
+}
+
+type CoreOSImages struct {
+	AWS      CoreOSAWSImages      `json:"aws"`
+	GCP      CoreOSGCPImage       `json:"gcp"`
+	PowerVS  CoreOSPowerVSImages  `json:"powervs"`
+	Kubevirt CoreOSKubevirtImages `json:"kubevirt"`
+}
+
+// CoreOSGCPImage contains GCP image information from stream metadata.
+// GCP images are global (not regional like AWS), so there's a single image reference.
+// The image path is constructed as projects/{Project}/global/images/{Name}.
+type CoreOSGCPImage struct {
+	// Project is the GCP project hosting the image (e.g., rhcos-cloud)
+	Project string `json:"project"`
+	// Name is the image name within the project
+	Name string `json:"name"`
+	// Family is the image family (optional, used for latest image lookups)
+	Family string `json:"family"`
+}
+
+type CoreRHCOSImage struct {
+	AzureDisk   CoreAzureDisk   `json:"azure-disk"`
+	Marketplace CoreMarketplace `json:"marketplace"`
+	AWSWinLi    CoreAWSWinLi    `json:"aws-winli"`
+}
+
+type CoreAzureDisk struct {
+	Release string `json:"release"`
+	URL     string `json:"url"`
+}
+
+// CoreMarketplace represents marketplace information for different cloud providers
+type CoreMarketplace struct {
+	Azure CoreAzureMarketplace `json:"azure"`
+}
+
+// CoreAzureMarketplace contains Azure marketplace image information
+type CoreAzureMarketplace struct {
+	NoPurchasePlan CoreAzureMarketplaceNoPurchasePlan `json:"no-purchase-plan"`
+}
+
+// CoreAzureMarketplaceNoPurchasePlan contains marketplace images that don't require a purchase plan
+type CoreAzureMarketplaceNoPurchasePlan struct {
+	HyperVGen1 *CoreAzureMarketplaceImage `json:"hyperVGen1,omitempty"`
+	HyperVGen2 *CoreAzureMarketplaceImage `json:"hyperVGen2,omitempty"`
+}
+
+// CoreAzureMarketplaceImage represents an Azure marketplace image specification
+type CoreAzureMarketplaceImage struct {
+	Publisher string `json:"publisher"`
+	Offer     string `json:"offer"`
+	SKU       string `json:"sku"`
+	Version   string `json:"version"`
+}
+
+type CoreAWSWinLi struct {
+	Regions map[string]CoreAWSWinLiRegion `json:"regions"`
+}
+
+type CoreAWSWinLiRegion struct {
+	Release string `json:"release"`
+	Image   string `json:"image"`
+}
+
+type CoreOSAWSImages struct {
+	Regions map[string]CoreOSAWSImage `json:"regions"`
+}
+
+type CoreOSAWSImage struct {
+	Release string `json:"release"`
+	Image   string `json:"image"`
+}
+
+type CoreOSKubevirtImages struct {
+	Release   string `json:"release"`
+	Image     string `json:"image"`
+	DigestRef string `json:"digest-ref"`
+}
+
+type CoreOSPowerVSImages struct {
+	Regions map[string]CoreOSPowerVSImage `json:"regions"`
+}
+
+type CoreOSPowerVSImage struct {
+	Release string `json:"release"`
+	Object  string `json:"object"`
+	Bucket  string `json:"bucket"`
+	URL     string `json:"url"`
 }
 
 func (i *ReleaseImage) Version() string {

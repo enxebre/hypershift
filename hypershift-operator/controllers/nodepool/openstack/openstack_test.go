@@ -13,7 +13,6 @@ import (
 
 	capiopenstackv1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
-	"github.com/coreos/stream-metadata-go/stream"
 	"github.com/google/go-cmp/cmp"
 	orc "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
 )
@@ -213,18 +212,13 @@ func TestOpenstackDefaultImage(t *testing.T) {
 		{
 			name: "valid metadata",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
 								"openstack": {
-									Formats: map[string]stream.ImageFormat{
-										"qcow2.gz": {
-											Disk: &stream.Artifact{
-												Location: "https://example.com/image.qcow2.gz",
-												Sha256:   "abcdef1234567890",
-											},
-										},
+									Formats: map[string]map[string]releaseinfo.CoreOSFormat{
+										"qcow2.gz": {"disk": {Location: "https://example.com/image.qcow2.gz", SHA256: "abcdef1234567890"}},
 									},
 								},
 							},
@@ -238,15 +232,15 @@ func TestOpenstackDefaultImage(t *testing.T) {
 		},
 		{
 			name:          "missing architecture",
-			releaseImage:  &releaseinfo.ReleaseImage{StreamMetadata: &stream.Stream{Architectures: map[string]stream.Arch{}}},
+			releaseImage:  &releaseinfo.ReleaseImage{StreamMetadata: &releaseinfo.CoreOSStreamMetadata{Architectures: map[string]releaseinfo.CoreOSArchitecture{}}},
 			expectedError: true,
 		},
 		{
 			name: "missing openstack artifact",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
-						"x86_64": {Artifacts: map[string]stream.PlatformArtifacts{}},
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
+						"x86_64": {Artifacts: map[string]releaseinfo.CoreOSArtifact{}},
 					},
 				},
 			},
@@ -255,11 +249,11 @@ func TestOpenstackDefaultImage(t *testing.T) {
 		{
 			name: "missing qcow2.gz format",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
-								"openstack": {Formats: map[string]stream.ImageFormat{}},
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
+								"openstack": {Formats: map[string]map[string]releaseinfo.CoreOSFormat{}},
 							},
 						},
 					},
@@ -270,12 +264,12 @@ func TestOpenstackDefaultImage(t *testing.T) {
 		{
 			name: "missing disk artifact",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
 								"openstack": {
-									Formats: map[string]stream.ImageFormat{
+									Formats: map[string]map[string]releaseinfo.CoreOSFormat{
 										"qcow2.gz": {},
 									},
 								},
@@ -320,10 +314,10 @@ func TestOpenStackReleaseImage(t *testing.T) {
 		{
 			name: "valid metadata",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
 								"openstack": {
 									Release: "4.9.0",
 								},
@@ -337,15 +331,15 @@ func TestOpenStackReleaseImage(t *testing.T) {
 		},
 		{
 			name:          "missing architecture",
-			releaseImage:  &releaseinfo.ReleaseImage{StreamMetadata: &stream.Stream{Architectures: map[string]stream.Arch{}}},
+			releaseImage:  &releaseinfo.ReleaseImage{StreamMetadata: &releaseinfo.CoreOSStreamMetadata{Architectures: map[string]releaseinfo.CoreOSArchitecture{}}},
 			expectedError: true,
 		},
 		{
 			name: "missing openstack artifact",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
-						"x86_64": {Artifacts: map[string]stream.PlatformArtifacts{}},
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
+						"x86_64": {Artifacts: map[string]releaseinfo.CoreOSArtifact{}},
 					},
 				},
 			},
@@ -398,19 +392,14 @@ func TestReconcileOpenStackImageSpec(t *testing.T) {
 				},
 			},
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
 								"openstack": {
 									Release: "4.9.0",
-									Formats: map[string]stream.ImageFormat{
-										"qcow2.gz": {
-											Disk: &stream.Artifact{
-												Location: "https://example.com/image.qcow2.gz",
-												Sha256:   "abcdef1234567890",
-											},
-										},
+									Formats: map[string]map[string]releaseinfo.CoreOSFormat{
+										"qcow2.gz": {"disk": {Location: "https://example.com/image.qcow2.gz", SHA256: "abcdef1234567890"}},
 									},
 								},
 							},
@@ -455,8 +444,8 @@ func TestReconcileOpenStackImageSpec(t *testing.T) {
 				},
 			},
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						// Missing x86_64 architecture data will cause the OpenstackDefaultImage to fail
 					},
 				},
@@ -511,10 +500,10 @@ func TestClusterImageName(t *testing.T) {
 				},
 			},
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{
 								"openstack": {
 									Release: "4.19.0",
 								},
@@ -535,8 +524,8 @@ func TestClusterImageName(t *testing.T) {
 				},
 			},
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{},
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{},
 				},
 			},
 			expectedError: true,
@@ -550,10 +539,10 @@ func TestClusterImageName(t *testing.T) {
 				},
 			},
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Artifacts: map[string]stream.PlatformArtifacts{},
+							Artifacts: map[string]releaseinfo.CoreOSArtifact{},
 						},
 					},
 				},

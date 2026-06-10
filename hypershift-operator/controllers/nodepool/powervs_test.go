@@ -6,8 +6,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/openshift/hypershift/support/releaseinfo"
-
-	"github.com/coreos/stream-metadata-go/stream"
 )
 
 func TestGetPowerVSImage(t *testing.T) {
@@ -21,10 +19,10 @@ func TestGetPowerVSImage(t *testing.T) {
 			name:   "When PowerVS images is nil, it should return error",
 			region: "us-south",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"ppc64le": {
-							Images: stream.Images{},
+							Images: releaseinfo.CoreOSImages{},
 						},
 					},
 				},
@@ -35,8 +33,8 @@ func TestGetPowerVSImage(t *testing.T) {
 			name:   "When architecture is not found, it should return error",
 			region: "us-south",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{},
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{},
 				},
 			},
 			expectedError: "couldn't find OS metadata for architecture",

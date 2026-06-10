@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	ignitionapi "github.com/coreos/ignition/v2/config/v3_2/types"
-	"github.com/coreos/stream-metadata-go/stream"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/vincent-petithory/dataurl"
 )
@@ -596,10 +596,10 @@ func TestDefaultNodePoolAMI(t *testing.T) {
 			region:        "us-east-1",
 			specifiedArch: "amd64",
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						"x86_64": {
-							Images: stream.Images{},
+							Images: releaseinfo.CoreOSImages{},
 						},
 					},
 				},

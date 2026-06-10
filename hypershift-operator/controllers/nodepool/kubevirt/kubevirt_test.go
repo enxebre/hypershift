@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/coreos/stream-metadata-go/stream"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/google/go-cmp/cmp"
@@ -1512,18 +1511,18 @@ func generateNodeTemplate(options ...nodeTemplateOption) *capikubevirt.VirtualMa
 func TestDefaultImage(t *testing.T) {
 	// Create a mock ReleaseImage with architecture-specific Kubevirt images
 	ri := &releaseinfo.ReleaseImage{
-		StreamMetadata: &stream.Stream{
-			Architectures: map[string]stream.Arch{
+		StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+			Architectures: map[string]releaseinfo.CoreOSArchitecture{
 				hyperv1.ArchitectureS390X: {
-					Images: stream.Images{
-						KubeVirt: &stream.ContainerImage{
+					Images: releaseinfo.CoreOSImages{
+						Kubevirt: releaseinfo.CoreOSKubevirtImages{
 							DigestRef: "quay.io/openshift/release@sha256:s390x1234",
 						},
 					},
 				},
 				hyperv1.ArchAliases[hyperv1.ArchitectureAMD64]: {
-					Images: stream.Images{
-						KubeVirt: &stream.ContainerImage{
+					Images: releaseinfo.CoreOSImages{
+						Kubevirt: releaseinfo.CoreOSKubevirtImages{
 							DigestRef: "quay.io/openshift/release@sha256:x86_641234",
 						},
 					},
@@ -1544,10 +1543,10 @@ func TestDefaultImage(t *testing.T) {
 			name: "When KubeVirt image metadata is nil, it should return error",
 			arch: hyperv1.ArchitectureAMD64,
 			releaseImage: &releaseinfo.ReleaseImage{
-				StreamMetadata: &stream.Stream{
-					Architectures: map[string]stream.Arch{
+				StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+					Architectures: map[string]releaseinfo.CoreOSArchitecture{
 						hyperv1.ArchAliases[hyperv1.ArchitectureAMD64]: {
-							Images: stream.Images{},
+							Images: releaseinfo.CoreOSImages{},
 						},
 					},
 				},

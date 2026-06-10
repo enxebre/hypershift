@@ -16,8 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/coreos/stream-metadata-go/stream"
 )
 
 var _ releaseinfo.ProviderWithRegistryOverrides = &FakeReleaseProvider{}
@@ -71,28 +69,28 @@ func (f *FakeReleaseProvider) Lookup(_ context.Context, image string, _ []byte) 
 				},
 			},
 		},
-		StreamMetadata: &stream.Stream{
-			Architectures: map[string]stream.Arch{
+		StreamMetadata: &releaseinfo.CoreOSStreamMetadata{
+			Architectures: map[string]releaseinfo.CoreOSArchitecture{
 				"x86_64": {
-					Images: stream.Images{
-						Aws: &stream.AwsImage{
-							Regions: map[string]stream.SingleImage{
+					Images: releaseinfo.CoreOSImages{
+						AWS: releaseinfo.CoreOSAWSImages{
+							Regions: map[string]releaseinfo.CoreOSAWSImage{
 								"us-east-1": {
 									Release: "us-east-1-x86_64-release",
 									Image:   "us-east-1-x86_64-image",
 								},
 							},
 						},
-						Gcp: &stream.GcpImage{
+						GCP: releaseinfo.CoreOSGCPImage{
 							Project: "rhcos-cloud",
 							Name:    "rhcos-x86-64-fake",
 						},
 					},
 				},
 				"aarch64": {
-					Images: stream.Images{
-						Aws: &stream.AwsImage{
-							Regions: map[string]stream.SingleImage{
+					Images: releaseinfo.CoreOSImages{
+						AWS: releaseinfo.CoreOSAWSImages{
+							Regions: map[string]releaseinfo.CoreOSAWSImage{
 								"us-east-1": {
 									Release: "us-east-1-aarch64-release",
 									Image:   "us-east-1-aarch64-image",
@@ -103,7 +101,7 @@ func (f *FakeReleaseProvider) Lookup(_ context.Context, image string, _ []byte) 
 								},
 							},
 						},
-						Gcp: &stream.GcpImage{
+						GCP: releaseinfo.CoreOSGCPImage{
 							Project: "rhcos-cloud",
 							Name:    "rhcos-aarch64-fake",
 						},

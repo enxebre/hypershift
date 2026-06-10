@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/openshift/hypershift/support/releaseinfo/fixtures"
-
-	"github.com/coreos/stream-metadata-go/stream"
 )
 
 func TestDeserializeImageStream(t *testing.T) {
@@ -18,8 +16,8 @@ func TestDeserializeImageStream(t *testing.T) {
 
 func TestDeserializeImageMetadata(t *testing.T) {
 	for _, imageMetadata := range [][]byte{fixtures.CoreOSBootImagesYAML_4_8, fixtures.CoreOSBootImagesYAML_4_10} {
-		var coreOSMetadata *stream.Stream
-		coreOSMetadata, err := DeserializeImageMetadata(imageMetadata)
+		var coreOSMetadata *CoreOSStreamMetadata
+		coreOSMetadata, _, err := DeserializeImageMetadata(imageMetadata)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -29,7 +27,7 @@ func TestDeserializeImageMetadata(t *testing.T) {
 			t.Fatal("missing x86_64 architecture")
 		}
 
-		if arch.RHELCoreOSExtensions == nil || arch.RHELCoreOSExtensions.AzureDisk == nil || arch.RHELCoreOSExtensions.AzureDisk.URL == "" {
+		if arch.RHCOS.AzureDisk.URL == "" {
 			t.Fatal("missing azure disk URL")
 		}
 

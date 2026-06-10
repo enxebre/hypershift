@@ -144,11 +144,12 @@ func OpenstackDefaultImage(releaseImage *releaseinfo.ReleaseImage) (string, stri
 	if !exists {
 		return "", "", fmt.Errorf("couldn't find OS metadata for openstack qcow2.gz")
 	}
-	if artifact.Disk == nil {
+	disk, hasDisk := artifact["disk"]
+	if !hasDisk {
 		return "", "", fmt.Errorf("couldn't find OS metadata for the openstack qcow2.gz disk")
 	}
 
-	return artifact.Disk.Location, artifact.Disk.Sha256, nil
+	return disk.Location, disk.SHA256, nil
 }
 
 // OpenStackReleaseImage returns the release version for the OpenStack image.

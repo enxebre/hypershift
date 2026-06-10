@@ -164,7 +164,7 @@ func TestReadComponentVersions(t *testing.T) {
 
 // TestReleaseInfoPowerVS test validates the presence of the powervs images in the 4.10 release
 func TestReleaseInfoPowerVS(t *testing.T) {
-	metadata, err := DeserializeImageMetadata(fixtures.CoreOSBootImagesYAML_4_10)
+	metadata, _, err := DeserializeImageMetadata(fixtures.CoreOSBootImagesYAML_4_10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,11 +172,11 @@ func TestReleaseInfoPowerVS(t *testing.T) {
 	if !ok {
 		t.Fatal("metadata does not contain the ppc64le architecture")
 	}
-	if arch.Images.PowerVS == nil || len(arch.Images.PowerVS.Regions) == 0 {
+	if len(arch.Images.PowerVS.Regions) == 0 {
 		t.Fatal("metadata does not contain any powervs regions")
 	}
 	for _, region := range arch.Images.PowerVS.Regions {
-		if region.Release == "" || region.Object == "" || region.Bucket == "" || region.Url == "" {
+		if region.Release == "" || region.Object == "" || region.Bucket == "" || region.URL == "" {
 			t.Fatalf("none of the fields in the image can be empty: %+v", region)
 		}
 	}
@@ -184,7 +184,7 @@ func TestReleaseInfoPowerVS(t *testing.T) {
 
 // TestReleaseInfoKubeVirt tests validates the presence of the kubevirt images
 func TestReleaseInfoKubeVirt(t *testing.T) {
-	metadata, err := DeserializeImageMetadata(fixtures.CoreOSBootImagesYAML_4_10)
+	metadata, _, err := DeserializeImageMetadata(fixtures.CoreOSBootImagesYAML_4_10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestReleaseInfoKubeVirt(t *testing.T) {
 	if !ok {
 		t.Fatal("metadata does not contain the x86_64 architecture")
 	}
-	if arch.Images.KubeVirt == nil || arch.Images.KubeVirt.DigestRef == "" {
+	if arch.Images.Kubevirt.DigestRef == "" {
 		t.Fatal("metadata does not contain a digest ref for kubevirt")
 	}
 }
