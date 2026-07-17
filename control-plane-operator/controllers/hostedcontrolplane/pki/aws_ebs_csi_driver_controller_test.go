@@ -35,7 +35,7 @@ func TestReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret(t *testing.T
 		secret *corev1.Secret
 	}{
 		{
-			name: "empty secret gets populated",
+			name: "When secret is empty, it should populate TLS cert and key with correct DNS names",
 			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "aws-ebs-csi-driver-controller-metrics-serving-cert",
@@ -43,10 +43,26 @@ func TestReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret(t *testing.T
 				},
 			},
 		},
+		{
+			name: "When secret already has valid cert data, it should remain stable on re-reconciliation",
+			secret: func() *corev1.Secret {
+				s := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "aws-ebs-csi-driver-controller-metrics-serving-cert",
+						Namespace: "test-namespace",
+					},
+				}
+				if err := ReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret(s, caSecret, ownerRef); err != nil {
+					t.Fatalf("failed to pre-populate secret: %v", err)
+				}
+				return s
+			}(),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if err := ReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret(tc.secret, caSecret, ownerRef); err != nil {
 				t.Fatalf("ReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret failed: %v", err)
 			}
@@ -94,6 +110,20 @@ func TestReconcileAWSEbsCsiDriverControllerMetricsServingCertSecret(t *testing.T
 
 			if certData.KeyUsage&x509.KeyUsageKeyEncipherment == 0 || certData.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
 				t.Error("expected key usage to include key encipherment and digital signature")
+			}
+
+			hasServerAuth := false
+			hasClientAuth := false
+			for _, usage := range certData.ExtKeyUsage {
+				if usage == x509.ExtKeyUsageServerAuth {
+					hasServerAuth = true
+				}
+				if usage == x509.ExtKeyUsageClientAuth {
+					hasClientAuth = true
+				}
+			}
+			if !hasServerAuth || !hasClientAuth {
+				t.Errorf("expected ExtKeyUsage to include both server and client auth, got %v", certData.ExtKeyUsage)
 			}
 		})
 	}
