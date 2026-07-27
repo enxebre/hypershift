@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(t *testing.T) {
+func TestReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret(t *testing.T) {
 	t.Parallel()
 
 	caCfg := certs.CertCfg{IsCA: true, Subject: pkix.Name{CommonName: "root-ca", OrganizationalUnit: []string{"openshift"}}}
@@ -52,7 +52,7 @@ func TestReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(t *testing.T
 						Namespace: "test-namespace",
 					},
 				}
-				if err := ReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(s, caSecret, ownerRef); err != nil {
+				if err := ReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret(s, caSecret, ownerRef); err != nil {
 					t.Fatalf("failed to pre-populate secret: %v", err)
 				}
 				return s
@@ -63,8 +63,8 @@ func TestReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(t *testing.T
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if err := ReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(tc.secret, caSecret, ownerRef); err != nil {
-				t.Fatalf("ReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret failed: %v", err)
+			if err := ReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret(tc.secret, caSecret, ownerRef); err != nil {
+				t.Fatalf("ReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret failed: %v", err)
 			}
 
 			if len(tc.secret.Data[corev1.TLSCertKey]) == 0 {

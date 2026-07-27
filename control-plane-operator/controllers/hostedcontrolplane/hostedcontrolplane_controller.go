@@ -1686,7 +1686,7 @@ func (r *HostedControlPlaneReconciler) reconcilePKI(ctx context.Context, hcp *hy
 			return fmt.Errorf("failed to reconcile %s secret: %w", awsPodIdentityWebhookServingCert.Name, err)
 		}
 
-		awsEbsCsiDriverControllerMetricsService := manifests.AWSEBSCSIDriverControllerMetricsService(hcp.Namespace)
+		awsEbsCsiDriverControllerMetricsService := manifests.AWSEBSCsiDriverControllerMetricsService(hcp.Namespace)
 		if err = r.Get(ctx, client.ObjectKeyFromObject(awsEbsCsiDriverControllerMetricsService), awsEbsCsiDriverControllerMetricsService); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return fmt.Errorf("failed to retrieve aws-ebs-csi-driver-controller-metrics service: %w", err)
@@ -1694,7 +1694,7 @@ func (r *HostedControlPlaneReconciler) reconcilePKI(ctx context.Context, hcp *hy
 		}
 
 		if hasServiceCAAnnotation := doesServiceHaveServiceCAAnnotation(awsEbsCsiDriverControllerMetricsService); !hasServiceCAAnnotation {
-			awsEbsCsiDriverControllerMetricsServingCert := manifests.AWSEBSCSIDriverControllerMetricsServingCert(hcp.Namespace)
+			awsEbsCsiDriverControllerMetricsServingCert := manifests.AWSEBSCsiDriverControllerMetricsServingCert(hcp.Namespace)
 
 			err = removeServiceCASecret(ctx, r.Client, awsEbsCsiDriverControllerMetricsServingCert)
 			if err != nil {
@@ -1702,7 +1702,7 @@ func (r *HostedControlPlaneReconciler) reconcilePKI(ctx context.Context, hcp *hy
 			}
 
 			if _, err = createOrUpdate(ctx, r, awsEbsCsiDriverControllerMetricsServingCert, func() error {
-				return pki.ReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(awsEbsCsiDriverControllerMetricsServingCert, rootCASecret, p.OwnerRef)
+				return pki.ReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret(awsEbsCsiDriverControllerMetricsServingCert, rootCASecret, p.OwnerRef)
 			}); err != nil {
 				return fmt.Errorf("failed to reconcile aws ebs csi driver controller metrics serving cert: %w", err)
 			}

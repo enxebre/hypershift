@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func ReconcileAWSEBSCSIDriverControllerMetricsServingCertSecret(secret, ca *corev1.Secret, ownerRef config.OwnerRef) error {
+func ReconcileAWSEBSCsiDriverControllerMetricsServingCertSecret(secret, ca *corev1.Secret, ownerRef config.OwnerRef) error {
 	dnsNames := []string{
 		fmt.Sprintf("aws-ebs-csi-driver-controller.%s.svc", secret.Namespace),
 		fmt.Sprintf("aws-ebs-csi-driver-controller.%s.svc.cluster.local", secret.Namespace),

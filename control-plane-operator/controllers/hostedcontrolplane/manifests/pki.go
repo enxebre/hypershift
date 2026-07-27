@@ -157,7 +157,7 @@ func OVNKubernetesControlPlaneService(ns string) *corev1.Service {
 	}
 }
 
-func AWSEBSCSIDriverControllerMetricsService(ns string) *corev1.Service {
+func AWSEBSCsiDriverControllerMetricsService(ns string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "aws-ebs-csi-driver-controller-metrics",
@@ -352,7 +352,7 @@ func AWSPodIdentityWebhookServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "aws-pod-identity-webhook-serving-cert")
 }
 
-func AWSEBSCSIDriverControllerMetricsServingCert(ns string) *corev1.Secret {
+func AWSEBSCsiDriverControllerMetricsServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "aws-ebs-csi-driver-controller-metrics-serving-cert")
 }
 
